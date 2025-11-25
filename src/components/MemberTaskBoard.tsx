@@ -1,10 +1,11 @@
 import { TeamMember, Task } from '../types';
 import { TaskCard } from './TaskCard';
 import { Button } from './ui/button';
-import { Avatar, AvatarFallback } from './ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Progress } from './ui/progress';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { ArrowLeft, Plus, Calendar, TrendingUp } from 'lucide-react';
+import { formatJalaliFull } from '../lib/jalaliDate';
 
 interface MemberTaskBoardProps {
   member: TeamMember;
@@ -21,12 +22,7 @@ export function MemberTaskBoard({ member, onBack, onTaskClick, onAddTask }: Memb
     ? Math.round((completedTasks / member.tasks.length) * 100) 
     : 0;
 
-  const currentDate = new Date().toLocaleDateString('en-US', { 
-    weekday: 'long',
-    year: 'numeric', 
-    month: 'long', 
-    day: 'numeric' 
-  });
+  const currentDate = formatJalaliFull(new Date().toISOString().split('T')[0]);
 
   const tasksByStatus = {
     'To Do': member.tasks.filter(t => t.status === 'To Do'),
@@ -51,6 +47,9 @@ export function MemberTaskBoard({ member, onBack, onTaskClick, onAddTask }: Memb
         <div className="bg-white rounded-xl p-8 border border-gray-200 shadow-sm mb-8">
           <div className="flex flex-col md:flex-row md:items-center gap-6">
             <Avatar className="h-20 w-20 border-4 border-purple-100">
+              {member.avatarUrl && (
+                <AvatarImage src={member.avatarUrl} alt={member.name} className="object-cover" />
+              )}
               <AvatarFallback className="bg-gradient-to-br from-purple-400 to-blue-500 text-white text-2xl">
                 {member.initials}
               </AvatarFallback>

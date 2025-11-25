@@ -1,5 +1,8 @@
 import { useState } from 'react';
 import { TeamMember, Task } from '../types';
+import { getMoodEmoji, getMoodLabelFa } from '../lib/moodHelpers';
+import { formatJalaliFull } from '../lib/jalaliDate';
+import { AvatarImage } from './ui/avatar';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Avatar, AvatarFallback } from './ui/avatar';
@@ -18,6 +21,7 @@ import {
 interface OtherUserViewProps {
   viewedUser: TeamMember;
   currentUser: TeamMember;
+  selectedDate: string;
   onBack: () => void;
   onTaskClick: (task: Task) => void;
 }
@@ -25,6 +29,7 @@ interface OtherUserViewProps {
 export function OtherUserView({
   viewedUser,
   currentUser,
+  selectedDate,
   onBack,
   onTaskClick
 }: OtherUserViewProps) {
@@ -33,8 +38,12 @@ export function OtherUserView({
   // Check if current user has permission
   const hasPermission = viewedUser.accessPermissions.includes(currentUser.id);
 
+  const tasksForSelectedDate = viewedUser.tasks.filter(
+    task => task.date === selectedDate && !task.isPrivate
+  );
+
   // Group tasks by date
-  const tasksByDate = viewedUser.tasks.reduce((acc, task) => {
+  const tasksByDate = tasksForSelectedDate.reduce((acc, task) => {
     if (!acc[task.date]) {
       acc[task.date] = [];
     }
@@ -57,14 +66,14 @@ export function OtherUserView({
   };
 
   // Calculate stats
-  const allTasks = viewedUser.tasks;
+  const allTasks = tasksForSelectedDate;
   const completedTasks = allTasks.filter(t => t.status === 'Completed').length;
   const overallProgress = allTasks.length > 0 
     ? Math.round((completedTasks / allTasks.length) * 100) 
     : 0;
 
-  const today = new Date().toISOString().split('T')[0];
-  const todayTasks = allTasks.filter(t => t.date === today);
+  const today = selectedDate;
+  const todayTasks = allTasks;
   const todayCompleted = todayTasks.filter(t => t.status === 'Completed').length;
   const todayProgress = todayTasks.length > 0 
     ? Math.round((todayCompleted / todayTasks.length) * 100) 
@@ -114,9 +123,16 @@ export function OtherUserView({
           بازگشت به داشبورد
         </Button>
 
+        <div className="text-right text-sm text-gray-600 mb-2">
+          {formatJalaliFull(selectedDate)}
+        </div>
+
         <Card className="p-6 mb-6 border-gray-200 bg-gradient-to-br from-white to-purple-50">
           <div className="flex items-center gap-4">
             <Avatar className="h-16 w-16 border-4 border-purple-100">
+              {viewedUser.avatarUrl && (
+                <AvatarImage src={viewedUser.avatarUrl} alt={viewedUser.name} className="object-cover" />
+              )}
               <AvatarFallback className="bg-gradient-to-br from-purple-400 to-blue-500 text-white text-xl">
                 {viewedUser.initials}
               </AvatarFallback>
@@ -130,6 +146,10 @@ export function OtherUserView({
               </div>
               <h1 className="text-gray-900 mb-1">{viewedUser.name}</h1>
               <p className="text-gray-600">{viewedUser.role}</p>
+            </div>
+            <div className="flex flex-col items-center justify-center gap-1" aria-label="حال امروز">
+              <div className="text-3xl">{getMoodEmoji(viewedUser.mood)}</div>
+              <div className="text-xs text-gray-500">{getMoodLabelFa(viewedUser.mood)}</div>
             </div>
           </div>
         </Card>

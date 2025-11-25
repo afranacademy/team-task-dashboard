@@ -5,6 +5,7 @@ import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Progress } from './ui/progress';
 import { TaskCard } from './TaskCard';
+import { formatJalaliDate, formatJalaliFull } from '../lib/jalaliDate';
 import { 
   ChevronDown, 
   ChevronUp, 
@@ -44,27 +45,6 @@ export function DailyDocument({
     t.deadline && new Date(t.deadline) < new Date() && t.status !== 'Completed'
   );
 
-  const formatDatePersian = (dateStr: string) => {
-    const date = new Date(dateStr);
-    const today = new Date().toISOString().split('T')[0];
-    const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
-    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
-
-    if (dateStr === today) return { label: 'امروز', color: 'blue' };
-    if (dateStr === tomorrow) return { label: 'فردا', color: 'purple' };
-    if (dateStr === yesterday) return { label: 'دیروز', color: 'gray' };
-
-    return { 
-      label: date.toLocaleDateString('fa-IR', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      }),
-      color: 'gray'
-    };
-  };
-
   const getStatusColor = () => {
     if (totalTasks === 0) return 'gray';
     if (progress === 100) return 'green';
@@ -73,7 +53,15 @@ export function DailyDocument({
     return 'yellow';
   };
 
-  const dateInfo = formatDatePersian(date);
+  const today = new Date().toISOString().split('T')[0];
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+  const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+  const dateInfo = (() => {
+    if (date === today) return { label: 'امروز', color: 'blue' };
+    if (date === tomorrow) return { label: 'فردا', color: 'purple' };
+    if (date === yesterday) return { label: 'دیروز', color: 'gray' };
+    return { label: formatJalaliFull(date), color: 'gray' };
+  })();
   const statusColor = getStatusColor();
 
   const colorClasses = {
@@ -95,14 +83,14 @@ export function DailyDocument({
   };
 
   return (
-    <Card className={`overflow-hidden transition-all duration-300 ${colorClasses[statusColor]}`}>
+    <Card className={`w-full overflow-hidden break-words transition-all duration-300 ${colorClasses[statusColor]}`}>
       {/* Header - Always Visible */}
       <div 
         className="p-6 cursor-pointer hover:bg-white/50 transition-colors"
         onClick={onToggleExpand}
       >
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <div className="flex flex-wrap items-center gap-3">
             <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
               statusColor === 'green' ? 'bg-green-500' :
               statusColor === 'blue' ? 'bg-blue-500' :
@@ -125,11 +113,7 @@ export function DailyDocument({
                 )}
               </div>
               <p className="text-sm text-gray-600">
-                {new Date(date).toLocaleDateString('fa-IR', { 
-                  year: 'numeric', 
-                  month: '2-digit', 
-                  day: '2-digit' 
-                })}
+                {formatJalaliDate(date)}
               </p>
             </div>
           </div>
@@ -153,7 +137,7 @@ export function DailyDocument({
               </span>
             </div>
 
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-green-600" />
                 <span className="text-sm text-gray-700">{completedTasks.length} انجام شده</span>
@@ -183,7 +167,7 @@ export function DailyDocument({
       {/* Expanded Content */}
       {isExpanded && (
         <div className="px-6 pb-6 space-y-4 border-t border-gray-200/50">
-          <div className="flex items-center justify-between pt-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-4">
             <h3 className="text-gray-900 text-right">وظایف روز</h3>
             <Button
               size="sm"

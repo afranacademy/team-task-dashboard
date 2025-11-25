@@ -1,4 +1,6 @@
 import { Task } from '../types';
+import { formatJalaliDate } from '../lib/dateJalali';
+import { getStatusLabelFa } from '../lib/statusLabels';
 import { Card } from './ui/card';
 import { Badge } from './ui/badge';
 import { Progress } from './ui/progress';
@@ -24,7 +26,7 @@ const statusDotColors = {
 export function TaskCard({ task, onClick }: TaskCardProps) {
   return (
     <Card 
-      className="p-5 hover:shadow-md transition-all duration-200 cursor-pointer border-gray-200 hover:border-purple-200"
+      className="w-full overflow-hidden break-words p-5 hover:shadow-md transition-all duration-200 cursor-pointer border-gray-200 hover:border-purple-200"
       onClick={onClick}
     >
       <div className="space-y-4">
@@ -38,7 +40,7 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
             className={`${statusColors[task.status]} border shrink-0`}
           >
             <span className={`w-1.5 h-1.5 rounded-full ${statusDotColors[task.status]} mr-1.5`} />
-            {task.status}
+            {getStatusLabelFa(task.status)}
           </Badge>
         </div>
         
@@ -57,7 +59,7 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
           {task.deadline && (
             <div className="flex items-center gap-2 text-sm text-gray-600">
               <Calendar className="w-4 h-4" />
-              <span>Due: {new Date(task.deadline).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+              <span>موعد: {formatJalaliDate(task.deadline)}</span>
             </div>
           )}
           

@@ -13,6 +13,7 @@ import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { TaskStatus } from '../types';
+import { formatJalaliDate } from '../lib/dateJalali';
 
 interface AddTaskDialogProps {
   open: boolean;
@@ -25,6 +26,7 @@ interface AddTaskDialogProps {
     expectedOutcome: string;
     deadline?: string;
     date: string;
+    isPrivate?: boolean;
   }) => void;
 }
 
@@ -35,6 +37,7 @@ export function AddTaskDialog({ open, onOpenChange, selectedDate, onAddTask }: A
   const [expectedOutcome, setExpectedOutcome] = useState('');
   const [deadline, setDeadline] = useState('');
   const [taskDate, setTaskDate] = useState(selectedDate);
+  const [isPrivate, setIsPrivate] = useState(false);
 
   // Update taskDate when selectedDate prop changes
   useEffect(() => {
@@ -51,6 +54,7 @@ export function AddTaskDialog({ open, onOpenChange, selectedDate, onAddTask }: A
         expectedOutcome: expectedOutcome.trim(),
         deadline: deadline || undefined,
         date: taskDate,
+        isPrivate,
       });
       setTitle('');
       setDescription('');
@@ -58,6 +62,7 @@ export function AddTaskDialog({ open, onOpenChange, selectedDate, onAddTask }: A
       setExpectedOutcome('');
       setDeadline('');
       setTaskDate(selectedDate);
+      setIsPrivate(false);
       onOpenChange(false);
     }
   };
@@ -127,24 +132,36 @@ export function AddTaskDialog({ open, onOpenChange, selectedDate, onAddTask }: A
 
               <div className="space-y-2">
                 <Label htmlFor="taskDate" className="text-right block">تاریخ وظیفه</Label>
-                <Input
-                  id="taskDate"
-                  type="date"
-                  value={taskDate}
-                  onChange={(e) => setTaskDate(e.target.value)}
-                  required
-                />
+                <div className="space-y-1">
+                  <Input
+                    id="taskDate"
+                    type="date"
+                    value={taskDate}
+                    onChange={(e) => setTaskDate(e.target.value)}
+                    required
+                  />
+                  <div className="text-xs text-gray-500 mt-1 text-right">
+                    تاریخ هجری شمسی: {formatJalaliDate(taskDate)}
+                  </div>
+                </div>
               </div>
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="deadline" className="text-right block">مهلت انجام (اختیاری)</Label>
-              <Input
-                id="deadline"
-                type="date"
-                value={deadline}
-                onChange={(e) => setDeadline(e.target.value)}
-              />
+              <div className="space-y-1">
+                <Input
+                  id="deadline"
+                  type="date"
+                  value={deadline}
+                  onChange={(e) => setDeadline(e.target.value)}
+                />
+                {deadline && (
+                  <div className="text-xs text-gray-500 mt-1 text-right">
+                    تاریخ هجری شمسی: {formatJalaliDate(deadline)}
+                  </div>
+                )}
+              </div>
             </div>
             
             <div className="space-y-2">
@@ -157,6 +174,17 @@ export function AddTaskDialog({ open, onOpenChange, selectedDate, onAddTask }: A
                 className="min-h-[100px] resize-none text-right"
                 required
               />
+            </div>
+
+            <div className="flex items-center justify-between mt-3">
+              <label className="flex items-center gap-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={isPrivate}
+                  onChange={(e) => setIsPrivate(e.target.checked)}
+                />
+                <span>این وظیفه فقط برای خودم باشد</span>
+              </label>
             </div>
           </div>
           

@@ -1,4 +1,7 @@
+import { useEffect, useState } from 'react';
 import { Task, TaskStatus, TeamMember } from '../types';
+import { formatJalaliDate } from '../lib/dateJalali';
+import { getStatusLabelFa } from '../lib/statusLabels';
 import {
   Dialog,
   DialogContent,
@@ -12,7 +15,7 @@ import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
 import { Calendar, Target, User, Clock, TrendingUp } from 'lucide-react';
-import { Avatar, AvatarFallback } from './ui/avatar';
+import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 
 interface TaskDetailModalProps {
   task: Task | null;
@@ -29,22 +32,31 @@ const statusColors = {
 };
 
 export function TaskDetailModal({ task, member, open, onOpenChange, onUpdateTask }: TaskDetailModalProps) {
+  const [isPrivate, setIsPrivate] = useState<boolean>(task?.isPrivate ?? false);
+
+  useEffect(() => {
+    setIsPrivate(task?.isPrivate ?? false);
+  }, [task]);
+
   if (!task || !member) return null;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle className="text-2xl text-gray-900">{task.title}</DialogTitle>
+          <DialogTitle className="text-2xl text-gray-900 text-right">{task.title}</DialogTitle>
           <DialogDescription className="text-sm text-gray-500">
-            Detailed information and updates for the task.
+            جزئیات و به‌روزرسانی‌های مربوط به این وظیفه
           </DialogDescription>
         </DialogHeader>
         
-        <div className="space-y-6 pt-2">
+        <div className="space-y-6 pt-2" dir="rtl">
           {/* Assigned Member */}
           <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg">
             <Avatar className="h-10 w-10 border-2 border-purple-100">
+              {member.avatarUrl && (
+                <AvatarImage src={member.avatarUrl} alt={member.name} className="object-cover" />
+              )}
               <AvatarFallback className="bg-gradient-to-br from-purple-400 to-blue-500 text-white">
                 {member.initials}
               </AvatarFallback>
@@ -52,7 +64,7 @@ export function TaskDetailModal({ task, member, open, onOpenChange, onUpdateTask
             <div>
               <div className="flex items-center gap-2 text-sm text-gray-500 mb-0.5">
                 <User className="w-3.5 h-3.5" />
-                <span>Assigned to</span>
+                <span>مسئول انجام</span>
               </div>
               <p className="text-gray-900">{member.name}</p>
               <p className="text-sm text-gray-500">{member.role}</p>
@@ -62,24 +74,26 @@ export function TaskDetailModal({ task, member, open, onOpenChange, onUpdateTask
           {/* Status and Progress */}
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label className="text-gray-700 mb-2">Status</Label>
+              <Label className="text-gray-700 mb-2">وضعیت</Label>
               <Select 
                 value={task.status} 
                 onValueChange={(value) => onUpdateTask(task.id, { status: value as TaskStatus })}
               >
                 <SelectTrigger className={statusColors[task.status]}>
-                  <SelectValue />
+                  <SelectValue placeholder={getStatusLabelFa(task.status)}>
+                    {getStatusLabelFa(task.status)}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="To Do">To Do</SelectItem>
-                  <SelectItem value="In Progress">In Progress</SelectItem>
-                  <SelectItem value="Completed">Completed</SelectItem>
+                  <SelectItem value="To Do">{getStatusLabelFa('To Do')}</SelectItem>
+                  <SelectItem value="In Progress">{getStatusLabelFa('In Progress')}</SelectItem>
+                  <SelectItem value="Completed">{getStatusLabelFa('Completed')}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             
             <div>
-              <Label className="text-gray-700 mb-2">Progress</Label>
+              <Label className="text-gray-700 mb-2">پیشرفت</Label>
               <div className="flex items-center gap-3">
                 <Progress value={task.progress} className="flex-1 h-2.5" />
                 <span className="text-sm text-gray-900 min-w-[3ch]">{task.progress}%</span>
@@ -92,15 +106,11 @@ export function TaskDetailModal({ task, member, open, onOpenChange, onUpdateTask
             <div className="space-y-2">
               <Label className="text-gray-700 flex items-center gap-2">
                 <Clock className="w-4 h-4" />
-                Start Date
+                تاریخ شروع
               </Label>
               <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-md text-sm text-gray-700">
                 <Calendar className="w-4 h-4 text-gray-400" />
-                {new Date(task.startDate).toLocaleDateString('en-US', { 
-                  month: 'long', 
-                  day: 'numeric', 
-                  year: 'numeric' 
-                })}
+                {formatJalaliDate(task.startDate)}
               </div>
             </div>
             
@@ -108,15 +118,11 @@ export function TaskDetailModal({ task, member, open, onOpenChange, onUpdateTask
               <div className="space-y-2">
                 <Label className="text-gray-700 flex items-center gap-2">
                   <Calendar className="w-4 h-4" />
-                  Deadline
+                  مهلت انجام
                 </Label>
                 <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-md text-sm text-gray-700">
                   <Calendar className="w-4 h-4 text-gray-400" />
-                  {new Date(task.deadline).toLocaleDateString('en-US', { 
-                    month: 'long', 
-                    day: 'numeric', 
-                    year: 'numeric' 
-                  })}
+                  {formatJalaliDate(task.deadline)}
                 </div>
               </div>
             )}
@@ -124,12 +130,12 @@ export function TaskDetailModal({ task, member, open, onOpenChange, onUpdateTask
 
           {/* Description */}
           <div className="space-y-2">
-            <Label className="text-gray-700">Description</Label>
+            <Label className="text-gray-700">توضیحات</Label>
             <Textarea
               value={task.description}
               onChange={(e) => onUpdateTask(task.id, { description: e.target.value })}
               className="min-h-[100px] resize-none"
-              placeholder="Task description..."
+              placeholder="توضیحات وظیفه..."
             />
           </div>
 
@@ -137,14 +143,14 @@ export function TaskDetailModal({ task, member, open, onOpenChange, onUpdateTask
           <div className="space-y-2">
             <Label className="text-gray-700 flex items-center gap-2">
               <Target className="w-4 h-4" />
-              Expected Outcome / Impact
+              نتیجهٔ مورد انتظار / تأثیر
             </Label>
             <div className="p-4 bg-gradient-to-br from-purple-50 to-blue-50 rounded-lg border border-purple-100">
               <Textarea
                 value={task.expectedOutcome}
                 onChange={(e) => onUpdateTask(task.id, { expectedOutcome: e.target.value })}
                 className="min-h-[100px] resize-none bg-white/50 backdrop-blur-sm"
-                placeholder="What is the expected result or impact of this task?"
+                placeholder="نتیجهٔ مورد انتظار از این وظیفه چیست؟"
               />
             </div>
           </div>
@@ -153,10 +159,10 @@ export function TaskDetailModal({ task, member, open, onOpenChange, onUpdateTask
           <div className="space-y-2">
             <Label className="text-gray-700 flex items-center gap-2">
               <TrendingUp className="w-4 h-4" />
-              Comments & Notes
+              توضیحات و یادداشت‌ها
             </Label>
             <Textarea
-              placeholder="Add comments, updates, or notes about this task..."
+              placeholder="توضیح یا یادداشت اضافه کنید..."
               className="min-h-[80px] resize-none"
             />
             {task.comments && task.comments.length > 0 && (
@@ -168,6 +174,21 @@ export function TaskDetailModal({ task, member, open, onOpenChange, onUpdateTask
                 ))}
               </div>
             )}
+          </div>
+
+          <div className="flex items-center justify-between mt-3">
+            <label className="flex items-center gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={isPrivate}
+                onChange={(e) => {
+                  const next = e.target.checked;
+                  setIsPrivate(next);
+                  onUpdateTask(task.id, { isPrivate: next });
+                }}
+              />
+              <span>این وظیفه فقط برای خودم باشد</span>
+            </label>
           </div>
         </div>
       </DialogContent>
