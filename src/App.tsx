@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { TeamMember, Task, TaskStatus, Project, ProjectMember, Mood } from './types';
 import { supabase } from './lib/supabaseClient';
 import { UserLogin } from './components/UserLogin';
@@ -33,7 +33,10 @@ export default function App() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [viewingUserId, setViewingUserId] = useState<string | null>(null);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const getLocalToday = () => new Date().toLocaleDateString('en-CA');
+
+  const [today, setToday] = useState(() => getLocalToday());
+  const [selectedDate, setSelectedDate] = useState(today);
   const [isTaskModalOpen, setIsTaskModalOpen] = useState(false);
   const [isAddTaskDialogOpen, setIsAddTaskDialogOpen] = useState(false);
   const [isPermissionManagerOpen, setIsPermissionManagerOpen] = useState(false);
@@ -42,6 +45,7 @@ export default function App() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectMembers, setProjectMembers] = useState<ProjectMember[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const prevTodayRef = useRef<string | null>(null);
 
   const currentUser = members.find((m: TeamMember) => m.id === currentUserId) || null;
   const viewingUser = members.find((m: TeamMember) => m.id === viewingUserId) || null;
@@ -93,6 +97,34 @@ export default function App() {
       )
     );
   };
+
+  useEffect(() => {
+    const updateToday = () => {
+      const now = getLocalToday();
+      setToday(prev => (prev === now ? prev : now));
+    };
+
+    updateToday();
+    const id = setInterval(updateToday, 60 * 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    if (prevTodayRef.current == null) {
+      prevTodayRef.current = today;
+      return;
+    }
+    if (selectedDate === prevTodayRef.current) {
+      setSelectedDate(today);
+    }
+    prevTodayRef.current = today;
+  }, [today, selectedDate]);
+
+  useEffect(() => {
+    if (selectedDate < today) {
+      setSelectedDate(today);
+    }
+  }, [today, selectedDate]);
 
   useEffect(() => {
     const init = async () => {
@@ -243,6 +275,37 @@ export default function App() {
     setViewingUserId(null);
     setCurrentView('login');
     localStorage.removeItem('currentUserId');
+  };
+
+  const handleDeleteAccount = async () => {
+    if (!currentUserId) return;
+
+    try {
+      const { error } = await supabase
+        .from('team_members')
+        .delete()
+        .eq('id', currentUserId);
+
+      if (error) {
+        console.error('[delete-account] supabase error:', error);
+        alert('حذف حساب با خطا مواجه شد. لطفاً دوباره تلاش کنید.');
+        return;
+      }
+
+      setMembers(prev =>
+        prev.filter(m => m.id !== currentUserId)
+      );
+
+      setSelectedTask(null);
+      setViewingUserId(null);
+      setCurrentUserId(null);
+      setCurrentView('login');
+
+      localStorage.removeItem('currentUserId');
+    } catch (err) {
+      console.error('[delete-account] unexpected error:', err);
+      alert('خطای غیرمنتظره‌ای رخ داد.');
+    }
   };
 
   const handleDeleteCurrentUser = async (): Promise<void> => {
@@ -449,6 +512,32 @@ export default function App() {
           : member
       )
     );
+  };
+
+  const handleDeleteTask = async (taskId: string): Promise<void> => {
+    const { error } = await supabase
+      .from('tasks')
+      .delete()
+      .eq('id', taskId);
+
+    if (error) {
+      console.error('[delete-task] error:', error);
+      return;
+    }
+
+    setMembers((prev: TeamMember[]) =>
+      prev.map((member: TeamMember) => ({
+        ...member,
+        tasks: member.tasks.filter((t: Task) => t.id !== taskId)
+      }))
+    );
+
+    setSelectedTask(null);
+    setIsTaskModalOpen(false);
+
+    if (currentUserId) {
+      await loadTasksForMember(currentUserId);
+    }
   };
 
   const handleOpenAddTaskDialog = (date: string) => {
@@ -718,6 +807,7 @@ export default function App() {
           open={isTaskModalOpen}
           onOpenChange={setIsTaskModalOpen}
           onUpdateTask={handleUpdateTask}
+          onDeleteTask={handleDeleteTask}
         />
 
         <AddProjectTaskDialog
@@ -741,6 +831,7 @@ export default function App() {
           currentUser={currentUser}
           allMembers={members}
           projects={projects}
+          today={today}
           selectedDate={selectedDate}
           onSelectedDateChange={setSelectedDate}
           onLogout={handleLogout}
@@ -751,7 +842,7 @@ export default function App() {
           onEditProfile={() => setIsEditProfileOpen(true)}
           onOpenProjects={handleOpenProjects}
           onUpdateMood={handleUpdateMood}
-          onDeleteAccount={handleDeleteCurrentUser}
+          onDeleteTask={handleDeleteTask}
         />
       ) : viewingUser ? (
         <OtherUserView
@@ -769,6 +860,7 @@ export default function App() {
         open={isTaskModalOpen}
         onOpenChange={setIsTaskModalOpen}
         onUpdateTask={handleUpdateTask}
+        onDeleteTask={handleDeleteTask}
       />
 
       <AddTaskDialog
@@ -791,6 +883,7 @@ export default function App() {
         onOpenChange={setIsEditProfileOpen}
         currentUser={currentUser}
         onSave={handleSaveProfile}
+        onDeleteAccount={handleDeleteAccount}
       />
     </div>
   );

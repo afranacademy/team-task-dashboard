@@ -23,6 +23,7 @@ interface TaskDetailModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onUpdateTask: (taskId: string, updates: Partial<Task>) => void;
+  onDeleteTask: (taskId: string) => void;
 }
 
 const statusColors = {
@@ -31,7 +32,7 @@ const statusColors = {
   'Completed': 'bg-green-50 text-green-700 border-green-200'
 };
 
-export function TaskDetailModal({ task, member, open, onOpenChange, onUpdateTask }: TaskDetailModalProps) {
+export function TaskDetailModal({ task, member, open, onOpenChange, onUpdateTask, onDeleteTask }: TaskDetailModalProps) {
   const [isPrivate, setIsPrivate] = useState<boolean>(task?.isPrivate ?? false);
 
   useEffect(() => {
@@ -189,6 +190,32 @@ export function TaskDetailModal({ task, member, open, onOpenChange, onUpdateTask
               />
               <span>این وظیفه فقط برای خودم باشد</span>
             </label>
+          </div>
+          <div className="flex items-center justify-between mt-3">
+            <label className="flex items-center gap-2 text-sm text-gray-700">
+              <input
+                type="checkbox"
+                checked={isPrivate}
+                onChange={(e) => {
+                  const next = e.target.checked;
+                  setIsPrivate(next);
+                  onUpdateTask(task.id, { isPrivate: next });
+                }}
+              />
+              <span>این وظیفه فقط برای خودم باشد</span>
+            </label>
+
+            <button
+              className="px-3 py-2 bg-red-600 text-white rounded-md text-sm"
+              onClick={() => {
+                if (task) {
+                  onDeleteTask(task.id);
+                  onOpenChange(false);
+                }
+              }}
+            >
+              حذف وظیفه
+            </button>
           </div>
         </div>
       </DialogContent>

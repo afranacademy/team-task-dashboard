@@ -26,9 +26,9 @@ interface PersonalDashboardProps {
   allMembers: TeamMember[];
   projects: Project[];
   selectedDate: string;
+  today: string;
   onSelectedDateChange: (date: string) => void;
   onLogout: () => void;
-  onDeleteAccount: () => void;
   onTaskClick: (task: Task) => void;
   onAddTask: (date: string) => void;
   onManagePermissions: () => void;
@@ -36,6 +36,7 @@ interface PersonalDashboardProps {
   onEditProfile: () => void;
   onOpenProjects: () => void;
   onUpdateMood: (userId: string, mood: Mood) => void;
+  onDeleteTask: (taskId: string) => void;
 }
 
 export function PersonalDashboard({
@@ -43,6 +44,7 @@ export function PersonalDashboard({
   allMembers,
   projects,
   selectedDate,
+  today,
   onSelectedDateChange,
   onLogout,
   onTaskClick,
@@ -52,7 +54,7 @@ export function PersonalDashboard({
   onEditProfile,
   onOpenProjects,
   onUpdateMood,
-  onDeleteAccount
+  onDeleteTask
 }: PersonalDashboardProps) {
   const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
   const [selectedMood, setSelectedMood] = useState<Mood | null>(currentUser.mood ?? null);
@@ -104,11 +106,11 @@ export function PersonalDashboard({
   // Get dates for next 7 days (for quick access)
   const upcomingDates = useMemo(() => {
     const dates: string[] = [];
-    const today = new Date();
+    const todayDate = new Date(today);
     
     for (let i = 0; i < 7; i++) {
-      const date = new Date(today);
-      date.setDate(today.getDate() + i);
+      const date = new Date(todayDate);
+      date.setDate(todayDate.getDate() + i);
       const dateStr = date.toISOString().split('T')[0];
       
       // Only add if not already in tasksByDate
@@ -118,7 +120,7 @@ export function PersonalDashboard({
     }
     
     return dates;
-  }, [tasksByDate]);
+  }, [tasksByDate, today]);
 
   // Get accessible members
   const accessibleMembers = allMembers.filter(
@@ -142,7 +144,7 @@ export function PersonalDashboard({
     setExpandedDates(newExpanded);
   };
 
-  const today = selectedDate;
+  const selectedDay = selectedDate;
   const todayTasks = sharedTasksForSelectedDate;
   const todayCompleted = todayTasks.filter(t => t.status === 'Completed').length;
   const todayProgress = todayTasks.length > 0 
@@ -240,13 +242,6 @@ export function PersonalDashboard({
             >
               <Settings className="w-4 h-4" />
               مدیریت دسترسی‌ها
-            </Button>
-            <Button
-              variant="outline"
-              onClick={onDeleteAccount}
-              className="border-red-500 text-red-600 hover:bg-red-50 text-xs"
-            >
-              حذف حساب من
             </Button>
             <Button
               variant="outline"
@@ -358,6 +353,7 @@ export function PersonalDashboard({
                         onAddTask={onAddTask}
                         isExpanded={expandedDates.has(date)}
                         onToggleExpand={() => toggleDateExpand(date)}
+                        onDeleteTask={onDeleteTask}
                         actionSlot={
                           <Button
                             variant="outline"
@@ -388,6 +384,7 @@ export function PersonalDashboard({
                       onAddTask={onAddTask}
                       isExpanded={false}
                       onToggleExpand={() => toggleDateExpand(date)}
+                      onDeleteTask={onDeleteTask}
                       actionSlot={
                         <Button
                           variant="outline"
@@ -412,6 +409,7 @@ export function PersonalDashboard({
                         onAddTask={onAddTask}
                         isExpanded={expandedDates.has(date)}
                         onToggleExpand={() => toggleDateExpand(date)}
+                        onDeleteTask={onDeleteTask}
                         actionSlot={
                           <Button
                             variant="outline"

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, ReactNode } from 'react';
 import { Task } from '../types';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
@@ -24,6 +24,8 @@ interface DailyDocumentProps {
   onAddTask: (date: string) => void;
   isExpanded?: boolean;
   onToggleExpand?: () => void;
+  onDeleteTask?: (taskId: string) => void;
+  actionSlot?: ReactNode;
 }
 
 export function DailyDocument({ 
@@ -32,7 +34,9 @@ export function DailyDocument({
   onTaskClick, 
   onAddTask,
   isExpanded = false,
-  onToggleExpand
+  onToggleExpand,
+  onDeleteTask,
+  actionSlot
 }: DailyDocumentProps) {
   const completedTasks = tasks.filter(t => t.status === 'Completed');
   const inProgressTasks = tasks.filter(t => t.status === 'In Progress');
@@ -169,17 +173,20 @@ export function DailyDocument({
         <div className="px-6 pb-6 space-y-4 border-t border-gray-200/50">
           <div className="flex flex-wrap items-center justify-between gap-3 pt-4">
             <h3 className="text-gray-900 text-right">وظایف روز</h3>
-            <Button
-              size="sm"
-              onClick={(e) => {
-                e.stopPropagation();
-                onAddTask(date);
-              }}
-              className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 gap-2"
-            >
-              <Plus className="w-4 h-4" />
-              افزودن وظیفه
-            </Button>
+            <div className="flex items-center gap-2">
+              {actionSlot}
+              <Button
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onAddTask(date);
+                }}
+                className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 gap-2"
+              >
+                <Plus className="w-4 h-4" />
+                افزودن وظیفه
+              </Button>
+            </div>
           </div>
 
           {totalTasks === 0 ? (
@@ -206,6 +213,7 @@ export function DailyDocument({
                   key={task.id}
                   task={task}
                   onClick={() => onTaskClick(task)}
+                  onDeleteTask={onDeleteTask}
                 />
               ))}
             </div>

@@ -10,9 +10,10 @@ interface EditProfileDialogProps {
   onOpenChange: (open: boolean) => void;
   currentUser: TeamMember;
   onSave: (data: { name: string; role: string; avatarUrl?: string }) => Promise<void> | void;
+  onDeleteAccount: () => Promise<void> | void;
 }
 
-export function EditProfileDialog({ open, onOpenChange, currentUser, onSave }: EditProfileDialogProps) {
+export function EditProfileDialog({ open, onOpenChange, currentUser, onSave, onDeleteAccount }: EditProfileDialogProps) {
   const [name, setName] = useState(currentUser.name);
   const [role, setRole] = useState(currentUser.role);
   const [avatarUrl, setAvatarUrl] = useState(currentUser.avatarUrl || '');
@@ -79,6 +80,26 @@ export function EditProfileDialog({ open, onOpenChange, currentUser, onSave }: E
               className="text-right"
               placeholder="https://..."
             />
+          </div>
+
+          <div className="space-y-2 pt-2 border-t border-gray-200">
+            <p className="text-right text-sm font-semibold text-red-600">حذف حساب</p>
+            <p className="text-right text-xs text-gray-600">
+              اگر این حساب را حذف کنید، تمام وظایف و دسترسی‌های مربوط به آن نیز حذف می‌شود.
+            </p>
+            <Button
+              type="button"
+              className="w-full bg-red-600 hover:bg-red-700 text-white"
+              onClick={() => {
+                const confirmed = window.confirm(
+                  'آیا مطمئن هستید؟ با حذف حساب، تمام وظایف و پروژه‌های مرتبط با شما نیز حذف می‌شود.'
+                );
+                if (!confirmed) return;
+                void onDeleteAccount();
+              }}
+            >
+              حذف کامل حساب کاربری
+            </Button>
           </div>
 
           <DialogFooter className="gap-2">

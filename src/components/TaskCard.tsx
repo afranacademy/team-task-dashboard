@@ -9,6 +9,7 @@ import { Calendar, Target } from 'lucide-react';
 interface TaskCardProps {
   task: Task;
   onClick: () => void;
+  onDeleteTask?: (taskId: string) => void;
 }
 
 const statusColors = {
@@ -23,7 +24,7 @@ const statusDotColors = {
   'Completed': 'bg-green-500'
 };
 
-export function TaskCard({ task, onClick }: TaskCardProps) {
+export function TaskCard({ task, onClick, onDeleteTask }: TaskCardProps) {
   return (
     <Card 
       className="w-full overflow-hidden break-words p-5 hover:shadow-md transition-all duration-200 cursor-pointer border-gray-200 hover:border-purple-200"
@@ -35,13 +36,27 @@ export function TaskCard({ task, onClick }: TaskCardProps) {
             <h4 className="text-gray-900 mb-1 truncate">{task.title}</h4>
             <p className="text-gray-500 text-sm line-clamp-2">{task.description}</p>
           </div>
-          <Badge 
-            variant="outline" 
-            className={`${statusColors[task.status]} border shrink-0`}
-          >
-            <span className={`w-1.5 h-1.5 rounded-full ${statusDotColors[task.status]} mr-1.5`} />
-            {getStatusLabelFa(task.status)}
-          </Badge>
+          <div className="flex items-start gap-2">
+            {onDeleteTask && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeleteTask(task.id);
+                }}
+                className="text-xs px-2 py-1 rounded-md bg-red-50 text-red-600 border border-red-200 hover:bg-red-100"
+              >
+                حذف
+              </button>
+            )}
+            <Badge 
+              variant="outline" 
+              className={`${statusColors[task.status]} border shrink-0`}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${statusDotColors[task.status]} mr-1.5`} />
+              {getStatusLabelFa(task.status)}
+            </Badge>
+          </div>
         </div>
         
         <div className="space-y-3">

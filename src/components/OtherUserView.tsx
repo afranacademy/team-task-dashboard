@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { TeamMember, Task } from '../types';
 import { getMoodEmoji, getMoodLabelFa } from '../lib/moodHelpers';
 import { formatJalaliFull } from '../lib/jalaliDate';
@@ -34,16 +34,25 @@ export function OtherUserView({
   onTaskClick
 }: OtherUserViewProps) {
   const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
+  const [selectedDateState, setSelectedDateState] = useState<string>(
+    selectedDate || new Date().toISOString().split('T')[0]
+  );
+
+  useEffect(() => {
+    if (selectedDate) {
+      setSelectedDateState(selectedDate);
+    }
+  }, [selectedDate]);
 
   // Check if current user has permission
   const hasPermission = viewedUser.accessPermissions.includes(currentUser.id);
 
-  const tasksForSelectedDate = viewedUser.tasks.filter(
-    task => task.date === selectedDate && !task.isPrivate
+  const visibleTasksForDay = (viewedUser.tasks ?? []).filter(
+    task => task.date === selectedDateState && task.isPrivate !== true
   );
 
   // Group tasks by date
-  const tasksByDate = tasksForSelectedDate.reduce((acc, task) => {
+  const tasksByDate = visibleTasksForDay.reduce((acc, task) => {
     if (!acc[task.date]) {
       acc[task.date] = [];
     }
@@ -66,13 +75,13 @@ export function OtherUserView({
   };
 
   // Calculate stats
-  const allTasks = tasksForSelectedDate;
+  const allTasks = visibleTasksForDay;
   const completedTasks = allTasks.filter(t => t.status === 'Completed').length;
   const overallProgress = allTasks.length > 0 
     ? Math.round((completedTasks / allTasks.length) * 100) 
     : 0;
 
-  const today = selectedDate;
+  const today = selectedDateState;
   const todayTasks = allTasks;
   const todayCompleted = todayTasks.filter(t => t.status === 'Completed').length;
   const todayProgress = todayTasks.length > 0 
@@ -123,8 +132,19 @@ export function OtherUserView({
           بازگشت به داشبورد
         </Button>
 
-        <div className="text-right text-sm text-gray-600 mb-2">
-          {formatJalaliFull(selectedDate)}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+          <div className="text-right text-sm text-gray-600">
+            {formatJalaliFull(selectedDateState)}
+          </div>
+          <div className="flex items-center gap-2 justify-end">
+            <span className="text-sm text-gray-700">انتخاب تاریخ:</span>
+            <input
+              type="date"
+              value={selectedDateState}
+              onChange={e => setSelectedDateState(e.target.value)}
+              className="border border-gray-200 rounded-lg px-3 py-2 text-sm text-right"
+            />
+          </div>
         </div>
 
         <Card className="p-6 mb-6 border-gray-200 bg-gradient-to-br from-white to-purple-50">
@@ -208,7 +228,7 @@ export function OtherUserView({
               {sortedDates.length === 0 ? (
                 <div className="text-center py-12">
                   <Calendar className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                  <h3 className="text-gray-500">هنوز وظیفه‌ای ثبت نشده</h3>
+                  <h3 className="text-gray-500">در این تاریخ وظیفه‌ای با دسترسی عمومی ثبت نشده است.</h3>
                 </div>
               ) : (
                 sortedDates.map(date => (
