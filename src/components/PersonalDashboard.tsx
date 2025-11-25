@@ -28,6 +28,7 @@ interface PersonalDashboardProps {
   selectedDate: string;
   onSelectedDateChange: (date: string) => void;
   onLogout: () => void;
+  onDeleteAccount: () => void;
   onTaskClick: (task: Task) => void;
   onAddTask: (date: string) => void;
   onManagePermissions: () => void;
@@ -50,7 +51,8 @@ export function PersonalDashboard({
   onViewOtherUser,
   onEditProfile,
   onOpenProjects,
-  onUpdateMood
+  onUpdateMood,
+  onDeleteAccount
 }: PersonalDashboardProps) {
   const [expandedDates, setExpandedDates] = useState<Set<string>>(new Set());
   const [selectedMood, setSelectedMood] = useState<Mood | null>(currentUser.mood ?? null);
@@ -238,6 +240,13 @@ export function PersonalDashboard({
             >
               <Settings className="w-4 h-4" />
               مدیریت دسترسی‌ها
+            </Button>
+            <Button
+              variant="outline"
+              onClick={onDeleteAccount}
+              className="border-red-500 text-red-600 hover:bg-red-50 text-xs"
+            >
+              حذف حساب من
             </Button>
             <Button
               variant="outline"

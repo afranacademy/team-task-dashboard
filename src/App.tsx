@@ -245,6 +245,75 @@ export default function App() {
     localStorage.removeItem('currentUserId');
   };
 
+  const handleDeleteCurrentUser = async (): Promise<void> => {
+    if (!currentUserId) return;
+
+    const confirmDelete = window.confirm(
+      'آیا مطمئن هستید که می‌خواهید حساب کاربری و تمام داده‌های مربوط به خود را حذف کنید؟ این کار قابل بازگشت نیست.'
+    );
+    if (!confirmDelete) return;
+
+    const userId = currentUserId;
+
+    try {
+      const { error: accessError } = await supabase
+        .from('member_access')
+        .delete()
+        .or(`owner_id.eq.${userId},viewer_id.eq.${userId}`);
+
+      if (accessError) {
+        console.error('[supabase] error deleting member_access', accessError);
+      }
+
+      const { error: moodError } = await supabase
+        .from('daily_mood')
+        .delete()
+        .eq('member_id', userId);
+
+      if (moodError) {
+        console.error('[supabase] error deleting daily_mood', moodError);
+      }
+
+      const { error: tasksError } = await supabase
+        .from('tasks')
+        .delete()
+        .eq('member_id', userId);
+
+      if (tasksError) {
+        console.error('[supabase] error deleting tasks', tasksError);
+      }
+
+      const { error: projectsError } = await supabase
+        .from('projects')
+        .delete()
+        .eq('owner_id', userId);
+
+      if (projectsError) {
+        console.error('[supabase] error deleting projects', projectsError);
+      }
+
+      const { error: memberError } = await supabase
+        .from('team_members')
+        .delete()
+        .eq('id', userId);
+
+      if (memberError) {
+        console.error('[supabase] error deleting team_member', memberError);
+      }
+
+      setMembers((prev: TeamMember[]) =>
+        prev.filter(m => m.id !== userId)
+      );
+
+      setCurrentUserId(null);
+      setViewingUserId(null);
+      setCurrentView('login');
+      localStorage.removeItem('currentUserId');
+    } catch (err) {
+      console.error('[delete-current-user] unexpected error', err);
+    }
+  };
+
   const handleViewOtherUser = async (userId: string) => {
     const owner = members.find((m: TeamMember) => m.id === userId);
     if (!owner || !currentUserId) return;
@@ -682,6 +751,7 @@ export default function App() {
           onEditProfile={() => setIsEditProfileOpen(true)}
           onOpenProjects={handleOpenProjects}
           onUpdateMood={handleUpdateMood}
+          onDeleteAccount={handleDeleteCurrentUser}
         />
       ) : viewingUser ? (
         <OtherUserView
