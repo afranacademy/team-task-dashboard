@@ -9,18 +9,16 @@ import path from 'path';
       react(),
       VitePWA({
         registerType: 'autoUpdate',
-        includeAssets: ['favicon.svg', 'robots.txt', 'apple-touch-icon.png'],
+        includeAssets: ['favicon.ico', 'robots.txt'],
         manifest: {
           name: 'AFRAN Team Task Manager',
           short_name: 'AFRAN Tasks',
-          description: 'داشبورد مدیریت وظایف تیم افران',
-          theme_color: '#0f172a',
-          background_color: '#0f172a',
-          display: 'standalone',
-          scope: '/',
           start_url: '/',
-          dir: 'rtl',
+          display: 'standalone',
+          background_color: '#0f172a',
+          theme_color: '#0f172a',
           lang: 'fa',
+          dir: 'rtl',
           icons: [
             {
               src: '/icons/afran-192.png',
@@ -35,7 +33,7 @@ import path from 'path';
           ]
         },
         workbox: {
-          globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+          globPatterns: ['**/*.{js,css,html,png,svg,ico}'],
         }
       })
     ],
