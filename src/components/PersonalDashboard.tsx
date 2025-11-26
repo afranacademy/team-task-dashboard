@@ -505,11 +505,21 @@ export function PersonalDashboard({
                     >
                       <div className="text-right">
                         <p className="text-sm text-gray-900">{task.title}</p>
-                        <p className="text-xs text-gray-500">{task.status}</p>
+                        <p className="text-xs text-gray-500">{getStatusLabelFa(task.status)}</p>
                       </div>
-                      <Button variant="outline" size="sm" onClick={() => onTaskClick(task)}>
-                        مشاهده
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <Button variant="outline" size="sm" onClick={() => onTaskClick(task)}>
+                          مشاهده
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => onDeleteTask(task.id)}
+                          className="text-white"
+                        >
+                          حذف
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 </div>
