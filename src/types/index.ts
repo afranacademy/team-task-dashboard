@@ -9,11 +9,13 @@ export interface Task {
   progress: number;
   expectedOutcome: string;
   deadline?: string;
-  startDate: string;
-  date: string; // The specific date this task is for
+  date: string; // Main date (YYYY-MM-DD, NOT NULL)
+  start_date?: string | null; // Start date (YYYY-MM-DD)
+  end_date?: string | null; // End date (YYYY-MM-DD)
   comments?: string[];
-  isPrivate?: boolean; // true = only owner can see, false/undefined = visible to team
+  isPrivate?: boolean;
   projectId?: string;
+  priority?: 'low' | 'medium' | 'high'; // Task priority
 }
 
 export interface Project {

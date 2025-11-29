@@ -8,7 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Badge } from './ui/badge';
 import { StatsCards } from './StatsCards';
 import { TimelineSection } from './TimelineSection';
-import { ArrowLeft, Calendar as CalendarIcon, Lock } from 'lucide-react';
+import { ArrowLeft, Calendar as CalendarIcon, Lock, Eye } from 'lucide-react';
 
 interface OtherUserViewProps {
   viewedUser: TeamMember;

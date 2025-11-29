@@ -84,11 +84,13 @@ export default function App() {
       progress: row.progress ?? 0,
       expectedOutcome: row.expected_outcome ?? '',
       deadline: row.deadline ?? undefined,
-      startDate: row.start_date,
       date: row.date,
+      start_date: row.start_date ?? null,
+      end_date: row.end_date ?? null,
       comments: row.comments ?? [],
       isPrivate: row.is_private ?? false,
       projectId: row.project_id ?? undefined,
+      priority: row.priority ?? 'medium',
     }));
 
     setMembers((prev: TeamMember[]) =>
@@ -446,9 +448,11 @@ export default function App() {
     if (updates.expectedOutcome !== undefined) updatePayload.expected_outcome = updates.expectedOutcome;
     if (updates.deadline !== undefined) updatePayload.deadline = updates.deadline ?? null;
     if (updates.date !== undefined) updatePayload.date = updates.date;
-    if (updates.startDate !== undefined) updatePayload.start_date = updates.startDate;
+    if (updates.start_date !== undefined) updatePayload.start_date = updates.start_date ?? null;
+    if (updates.end_date !== undefined) updatePayload.end_date = updates.end_date ?? null;
     if (updates.description !== undefined) updatePayload.description = updates.description;
     if (updates.isPrivate !== undefined) updatePayload.is_private = updates.isPrivate;
+    if (updates.priority !== undefined) updatePayload.priority = updates.priority;
 
     if (Object.keys(updatePayload).length > 0) {
       await supabase
@@ -464,31 +468,33 @@ export default function App() {
     status: TaskStatus;
     expectedOutcome: string;
     deadline?: string;
-    date: string;
+    date?: string;
     isPrivate?: boolean;
   }) => {
     if (!currentUserId) return;
 
-    // Ensure date is always set (default to today if not provided)
-    const today = new Date().toISOString().split('T')[0];
-    const taskDate = taskData.date || today;
-    const startDate = taskDate; // start_date = date (as per requirements)
-
     const progress = taskData.status === 'Completed' ? 100 : taskData.status === 'In Progress' ? 50 : 0;
+    
+    // Build insert payload - omit date fields if not provided to let DB defaults + trigger handle them
+    const insertPayload: any = {
+      member_id: currentUserId,
+      title: taskData.title,
+      description: taskData.description,
+      status: taskData.status,
+      progress,
+      expected_outcome: taskData.expectedOutcome,
+      deadline: taskData.deadline ?? null,
+      is_private: taskData.isPrivate ?? false,
+    };
+    
+    // Only include date if explicitly provided
+    if (taskData.date) {
+      insertPayload.date = taskData.date;
+    }
+
     const { data, error } = await supabase
       .from('tasks')
-      .insert({
-        member_id: currentUserId,
-        title: taskData.title,
-        description: taskData.description,
-        status: taskData.status,
-        progress,
-        expected_outcome: taskData.expectedOutcome,
-        deadline: taskData.deadline ?? null,
-        date: taskDate,
-        start_date: startDate,
-        is_private: taskData.isPrivate ?? false,
-      })
+      .insert(insertPayload)
       .select('*')
       .single();
 
@@ -505,10 +511,12 @@ export default function App() {
       progress: data.progress ?? progress,
       expectedOutcome: data.expected_outcome ?? '',
       deadline: data.deadline ?? undefined,
-      startDate: data.start_date,
       date: data.date,
+      start_date: data.start_date ?? null,
+      end_date: data.end_date ?? null,
       comments: data.comments ?? [],
       isPrivate: data.is_private ?? false,
+      priority: data.priority ?? 'medium',
     };
 
     setMembers((prevMembers: TeamMember[]) =>
@@ -518,6 +526,9 @@ export default function App() {
           : member
       )
     );
+
+    // Reload tasks to ensure sync
+    await loadTasksForMember(currentUserId);
   };
 
   const handleDeleteTask = async (taskId: string): Promise<void> => {
@@ -633,15 +644,13 @@ export default function App() {
     status: TaskStatus;
     expectedOutcome: string;
     deadline?: string;
-    date: string;
+    date?: string;
+    start_date?: string;
+    end_date?: string;
     isPrivate?: boolean;
+    priority?: 'low' | 'medium' | 'high';
   }) => {
     if (!selectedProjectId) return;
-
-    // Ensure date is always set (default to today if not provided)
-    const today = new Date().toISOString().split('T')[0];
-    const taskDate = data.date || today;
-    const startDate = taskDate; // start_date = date (as per requirements)
 
     const progress =
       data.status === 'Completed'
@@ -650,28 +659,40 @@ export default function App() {
         ? 50
         : 0;
 
+    // Build insert payload - omit date fields if not provided to let DB defaults + trigger handle them
+    const insertPayload: any = {
+      member_id: data.assigneeId,
+      project_id: selectedProjectId,
+      title: data.title,
+      description: data.description,
+      status: data.status,
+      progress,
+      expected_outcome: data.expectedOutcome,
+      deadline: data.deadline ?? null,
+      is_private: data.isPrivate ?? false,
+      priority: data.priority ?? 'medium',
+    };
+    
+    // Only include date fields if explicitly provided
+    if (data.date) insertPayload.date = data.date;
+    if (data.start_date) insertPayload.start_date = data.start_date;
+    if (data.end_date) insertPayload.end_date = data.end_date;
+
+    console.log('[ADD TASK] Insert payload:', insertPayload);
+
     const { data: inserted, error } = await supabase
       .from('tasks')
-      .insert({
-        member_id: data.assigneeId,
-        project_id: selectedProjectId,
-        title: data.title,
-        description: data.description,
-        status: data.status,
-        progress,
-        expected_outcome: data.expectedOutcome,
-        deadline: data.deadline ?? null,
-        date: taskDate,
-        start_date: startDate,
-        is_private: data.isPrivate ?? false,
-      })
+      .insert(insertPayload)
       .select('*')
       .single();
 
     if (error || !inserted) {
       console.error('[supabase] error inserting project task', error);
+      alert('خطا در ایجاد وظیفه: ' + (error?.message || 'خطای ناشناخته'));
       return;
     }
+
+    console.log('[ADD TASK] Inserted task:', inserted);
 
     const newTask: Task = {
       id: inserted.id,
@@ -681,20 +702,32 @@ export default function App() {
       progress: inserted.progress ?? progress,
       expectedOutcome: inserted.expected_outcome ?? '',
       deadline: inserted.deadline ?? undefined,
-      startDate: inserted.start_date,
       date: inserted.date,
+      start_date: inserted.start_date ?? null,
+      end_date: inserted.end_date ?? null,
       comments: inserted.comments ?? [],
       isPrivate: inserted.is_private ?? false,
       projectId: inserted.project_id ?? undefined,
+      priority: inserted.priority ?? 'medium',
     };
 
+    console.log('[ADD TASK] New task object:', newTask);
+    console.log('[ADD TASK] Adding to member:', data.assigneeId);
+
     setMembers((prevMembers: TeamMember[]) =>
-      prevMembers.map((member: TeamMember) =>
-        member.id === data.assigneeId
-          ? { ...member, tasks: [...(member.tasks || []), newTask] }
-          : member
-      )
+      prevMembers.map((member: TeamMember) => {
+        if (member.id === data.assigneeId) {
+          console.log('[ADD TASK] Found member, current tasks:', member.tasks?.length || 0);
+          return { ...member, tasks: [...(member.tasks || []), newTask] };
+        }
+        return member;
+      })
     );
+
+    console.log('[ADD TASK] Task added successfully!');
+
+    // Reload tasks for the assignee to ensure UI is in sync
+    await loadTasksForMember(data.assigneeId);
   };
 
   const handleCreateProject = async (data: {
@@ -767,10 +800,12 @@ export default function App() {
 
   if (currentView === 'login') {
     return (
-      <UserLogin
-        members={members}
-        onLoginWithCredentials={handleLoginWithCredentials}
-      />
+      <div dir="rtl">
+        <UserLogin
+          members={members}
+          onLoginWithCredentials={handleLoginWithCredentials}
+        />
+      </div>
     );
   }
 
@@ -780,15 +815,17 @@ export default function App() {
 
   if (currentView === 'projects-list') {
     return (
-      <ProjectsDashboard
-        currentUser={currentUser}
-        projects={projects}
-        projectMembers={projectMembers}
-        allMembers={members}
-        onBackToPersonal={handleBackToPersonalFromProjects}
-        onOpenProject={projectId => { void handleOpenProjectDetail(projectId); }}
-        onCreateProject={handleCreateProject}
-      />
+      <div dir="rtl">
+        <ProjectsDashboard
+          currentUser={currentUser}
+          projects={projects}
+          projectMembers={projectMembers}
+          allMembers={members}
+          onBackToPersonal={handleBackToPersonalFromProjects}
+          onOpenProject={projectId => { void handleOpenProjectDetail(projectId); }}
+          onCreateProject={handleCreateProject}
+        />
+      </div>
     );
   }
 
@@ -798,7 +835,7 @@ export default function App() {
     );
 
     return (
-      <>
+      <div dir="rtl">
         <ProjectDetailView
           currentUser={currentUser}
           project={selectedProject}
@@ -832,12 +869,12 @@ export default function App() {
           selectedDate={selectedDate}
           onAddTask={handleAddProjectTask}
         />
-      </>
+      </div>
     );
   }
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen" dir="rtl">
       {currentView === 'personal' ? (
         <PersonalDashboard
           currentUser={currentUser}
