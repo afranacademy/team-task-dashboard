@@ -47,13 +47,17 @@ export function AddTaskDialog({ open, onOpenChange, selectedDate, onAddTask }: A
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (title.trim() && description.trim() && expectedOutcome.trim()) {
+      // Ensure date is always set (default to today if not provided)
+      const today = new Date().toISOString().split('T')[0];
+      const finalDate = taskDate || today;
+
       onAddTask({
         title: title.trim(),
         description: description.trim(),
         status,
         expectedOutcome: expectedOutcome.trim(),
         deadline: deadline || undefined,
-        date: taskDate,
+        date: finalDate,
         isPrivate,
       });
       setTitle('');

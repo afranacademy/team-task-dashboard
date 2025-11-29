@@ -56,6 +56,10 @@ export function AddProjectTaskDialog({
     e.preventDefault();
     if (!assigneeId || !title.trim()) return;
 
+    // Ensure date is always set (default to today if not provided)
+    const today = new Date().toISOString().split('T')[0];
+    const finalDate = taskDate || today;
+
     await onAddTask({
       assigneeId,
       title: title.trim(),
@@ -63,7 +67,7 @@ export function AddProjectTaskDialog({
       status,
       expectedOutcome: expectedOutcome.trim(),
       deadline: deadline || undefined,
-      date: taskDate,
+      date: finalDate,
       isPrivate,
     });
     setTitle('');

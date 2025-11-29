@@ -446,6 +446,7 @@ export default function App() {
     if (updates.expectedOutcome !== undefined) updatePayload.expected_outcome = updates.expectedOutcome;
     if (updates.deadline !== undefined) updatePayload.deadline = updates.deadline ?? null;
     if (updates.date !== undefined) updatePayload.date = updates.date;
+    if (updates.startDate !== undefined) updatePayload.start_date = updates.startDate;
     if (updates.description !== undefined) updatePayload.description = updates.description;
     if (updates.isPrivate !== undefined) updatePayload.is_private = updates.isPrivate;
 
@@ -468,6 +469,11 @@ export default function App() {
   }) => {
     if (!currentUserId) return;
 
+    // Ensure date is always set (default to today if not provided)
+    const today = new Date().toISOString().split('T')[0];
+    const taskDate = taskData.date || today;
+    const startDate = taskDate; // start_date = date (as per requirements)
+
     const progress = taskData.status === 'Completed' ? 100 : taskData.status === 'In Progress' ? 50 : 0;
     const { data, error } = await supabase
       .from('tasks')
@@ -479,8 +485,8 @@ export default function App() {
         progress,
         expected_outcome: taskData.expectedOutcome,
         deadline: taskData.deadline ?? null,
-        date: taskData.date,
-        start_date: new Date().toISOString().split('T')[0],
+        date: taskDate,
+        start_date: startDate,
         is_private: taskData.isPrivate ?? false,
       })
       .select('*')
@@ -632,6 +638,11 @@ export default function App() {
   }) => {
     if (!selectedProjectId) return;
 
+    // Ensure date is always set (default to today if not provided)
+    const today = new Date().toISOString().split('T')[0];
+    const taskDate = data.date || today;
+    const startDate = taskDate; // start_date = date (as per requirements)
+
     const progress =
       data.status === 'Completed'
         ? 100
@@ -650,8 +661,8 @@ export default function App() {
         progress,
         expected_outcome: data.expectedOutcome,
         deadline: data.deadline ?? null,
-        date: data.date,
-        start_date: new Date().toISOString().split('T')[0],
+        date: taskDate,
+        start_date: startDate,
         is_private: data.isPrivate ?? false,
       })
       .select('*')
@@ -799,6 +810,7 @@ export default function App() {
           onBack={handleBackToPersonalFromProjects}
           onTaskClick={handleTaskClick}
           onAddProjectTask={handleAddProjectTaskDialogOpen}
+          onUpdateTask={handleUpdateTask}
         />
 
         <TaskDetailModal
