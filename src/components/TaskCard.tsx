@@ -4,7 +4,7 @@ import { getStatusLabelFa } from '../lib/statusLabels';
 import { Card } from './ui/card';
 import { Badge } from './ui/badge';
 import { Progress } from './ui/progress';
-import { Calendar, Target } from 'lucide-react';
+import { Calendar, Target, Lock } from 'lucide-react';
 
 interface TaskCardProps {
   task: Task;
@@ -37,6 +37,12 @@ export function TaskCard({ task, onClick, onDeleteTask }: TaskCardProps) {
             <p className="text-gray-500 text-sm line-clamp-2">{task.description}</p>
           </div>
           <div className="flex items-start gap-2">
+            {task.isPrivate && (
+              <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
+                <Lock className="w-3 h-3 ml-1" />
+                خصوصی
+              </Badge>
+            )}
             {onDeleteTask && (
               <button
                 type="button"

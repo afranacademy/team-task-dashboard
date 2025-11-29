@@ -14,8 +14,10 @@ import { Progress } from './ui/progress';
 import { Label } from './ui/label';
 import { Textarea } from './ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { Calendar, Target, User, Clock, TrendingUp } from 'lucide-react';
+import { Calendar, Target, User, Clock, Lock, ShieldCheck } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
+import { Switch } from './ui/switch';
+import { Button } from './ui/button';
 
 interface TaskDetailModalProps {
   task: Task | null;
@@ -29,10 +31,17 @@ interface TaskDetailModalProps {
 const statusColors = {
   'To Do': 'bg-gray-100 text-gray-700 border-gray-200',
   'In Progress': 'bg-blue-50 text-blue-700 border-blue-200',
-  'Completed': 'bg-green-50 text-green-700 border-green-200'
+  'Completed': 'bg-green-50 text-green-700 border-green-200',
 };
 
-export function TaskDetailModal({ task, member, open, onOpenChange, onUpdateTask, onDeleteTask }: TaskDetailModalProps) {
+export function TaskDetailModal({
+  task,
+  member,
+  open,
+  onOpenChange,
+  onUpdateTask,
+  onDeleteTask,
+}: TaskDetailModalProps) {
   const [isPrivate, setIsPrivate] = useState<boolean>(task?.isPrivate ?? false);
 
   useEffect(() => {
@@ -50,34 +59,63 @@ export function TaskDetailModal({ task, member, open, onOpenChange, onUpdateTask
             جزئیات و به‌روزرسانی‌های مربوط به این وظیفه
           </DialogDescription>
         </DialogHeader>
-        
+
         <div className="space-y-6 pt-2" dir="rtl">
-          {/* Assigned Member */}
-          <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg">
-            <Avatar className="h-10 w-10 border-2 border-purple-100">
-              {member.avatarUrl && (
-                <AvatarImage src={member.avatarUrl} alt={member.name} className="object-cover" />
-              )}
-              <AvatarFallback className="bg-gradient-to-br from-purple-400 to-blue-500 text-white">
-                {member.initials}
-              </AvatarFallback>
-            </Avatar>
-            <div>
-              <div className="flex items-center gap-2 text-sm text-gray-500 mb-0.5">
-                <User className="w-3.5 h-3.5" />
-                <span>مسئول انجام</span>
+          <div className="flex flex-wrap items-center gap-2">
+            <Badge className={statusColors[task.status]}>
+              {getStatusLabelFa(task.status)}
+            </Badge>
+            {isPrivate && (
+              <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200">
+                <Lock className="w-3 h-3 ml-1" />
+                خصوصی
+              </Badge>
+            )}
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-[1.2fr_1fr]">
+            <div className="flex items-center gap-3 p-4 bg-gray-50 rounded-lg">
+              <Avatar className="h-10 w-10 border-2 border-purple-100">
+                {member.avatarUrl && (
+                  <AvatarImage src={member.avatarUrl} alt={member.name} className="object-cover" />
+                )}
+                <AvatarFallback className="bg-gradient-to-br from-purple-400 to-blue-500 text-white">
+                  {member.initials}
+                </AvatarFallback>
+              </Avatar>
+              <div>
+                <div className="flex items-center gap-2 text-sm text-gray-500 mb-0.5">
+                  <User className="w-3.5 h-3.5" />
+                  <span>مسئول انجام</span>
+                </div>
+                <p className="text-gray-900">{member.name}</p>
+                <p className="text-sm text-gray-500">{member.role}</p>
               </div>
-              <p className="text-gray-900">{member.name}</p>
-              <p className="text-sm text-gray-500">{member.role}</p>
+            </div>
+
+            <div className="p-4 bg-purple-50 rounded-lg border border-purple-100 flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-sm text-purple-700">
+                <ShieldCheck className="w-4 h-4" />
+                <span>حریم خصوصی</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">فقط خودم ببینم</span>
+                <Switch
+                  checked={isPrivate}
+                  onCheckedChange={(checked) => {
+                    setIsPrivate(!!checked);
+                    onUpdateTask(task.id, { isPrivate: !!checked });
+                  }}
+                />
+              </div>
             </div>
           </div>
 
-          {/* Status and Progress */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <Label className="text-gray-700 mb-2">وضعیت</Label>
-              <Select 
-                value={task.status} 
+              <Select
+                value={task.status}
                 onValueChange={(value) => onUpdateTask(task.id, { status: value as TaskStatus })}
               >
                 <SelectTrigger className={statusColors[task.status]}>
@@ -92,7 +130,7 @@ export function TaskDetailModal({ task, member, open, onOpenChange, onUpdateTask
                 </SelectContent>
               </Select>
             </div>
-            
+
             <div>
               <Label className="text-gray-700 mb-2">پیشرفت</Label>
               <div className="flex items-center gap-3">
@@ -102,8 +140,7 @@ export function TaskDetailModal({ task, member, open, onOpenChange, onUpdateTask
             </div>
           </div>
 
-          {/* Dates */}
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label className="text-gray-700 flex items-center gap-2">
                 <Clock className="w-4 h-4" />
@@ -114,7 +151,7 @@ export function TaskDetailModal({ task, member, open, onOpenChange, onUpdateTask
                 {formatJalaliDate(task.startDate)}
               </div>
             </div>
-            
+
             {task.deadline && (
               <div className="space-y-2">
                 <Label className="text-gray-700 flex items-center gap-2">
@@ -129,7 +166,6 @@ export function TaskDetailModal({ task, member, open, onOpenChange, onUpdateTask
             )}
           </div>
 
-          {/* Description */}
           <div className="space-y-2">
             <Label className="text-gray-700">توضیحات</Label>
             <Textarea
@@ -140,33 +176,22 @@ export function TaskDetailModal({ task, member, open, onOpenChange, onUpdateTask
             />
           </div>
 
-          {/* Expected Outcome */}
           <div className="space-y-2">
             <Label className="text-gray-700 flex items-center gap-2">
               <Target className="w-4 h-4" />
               نتیجهٔ مورد انتظار / تأثیر
             </Label>
-            <div className="p-4 bg-gradient-to-br from-purple-50 to-blue-50 rounded-lg border border-purple-100">
-              <Textarea
-                value={task.expectedOutcome}
-                onChange={(e) => onUpdateTask(task.id, { expectedOutcome: e.target.value })}
-                className="min-h-[100px] resize-none bg-white/50 backdrop-blur-sm"
-                placeholder="نتیجهٔ مورد انتظار از این وظیفه چیست؟"
-              />
-            </div>
+            <Textarea
+              value={task.expectedOutcome}
+              onChange={(e) => onUpdateTask(task.id, { expectedOutcome: e.target.value })}
+              className="min-h-[100px] resize-none bg-purple-50 border-purple-100"
+              placeholder="نتیجهٔ مورد انتظار از این وظیفه چیست؟"
+            />
           </div>
 
-          {/* Comments Section */}
-          <div className="space-y-2">
-            <Label className="text-gray-700 flex items-center gap-2">
-              <TrendingUp className="w-4 h-4" />
-              توضیحات و یادداشت‌ها
-            </Label>
-            <Textarea
-              placeholder="توضیح یا یادداشت اضافه کنید..."
-              className="min-h-[80px] resize-none"
-            />
-            {task.comments && task.comments.length > 0 && (
+          {task.comments && task.comments.length > 0 && (
+            <div className="space-y-2">
+              <Label className="text-gray-700">یادداشت‌ها</Label>
               <div className="mt-3 space-y-2">
                 {task.comments.map((comment, index) => (
                   <div key={index} className="p-3 bg-gray-50 rounded-md text-sm text-gray-700">
@@ -174,48 +199,22 @@ export function TaskDetailModal({ task, member, open, onOpenChange, onUpdateTask
                   </div>
                 ))}
               </div>
-            )}
-          </div>
+            </div>
+          )}
 
-          <div className="flex items-center justify-between mt-3">
-            <label className="flex items-center gap-2 text-sm text-gray-700">
-              <input
-                type="checkbox"
-                checked={isPrivate}
-                onChange={(e) => {
-                  const next = e.target.checked;
-                  setIsPrivate(next);
-                  onUpdateTask(task.id, { isPrivate: next });
-                }}
-              />
-              <span>این وظیفه فقط برای خودم باشد</span>
-            </label>
-          </div>
-          <div className="flex items-center justify-between mt-3">
-            <label className="flex items-center gap-2 text-sm text-gray-700">
-              <input
-                type="checkbox"
-                checked={isPrivate}
-                onChange={(e) => {
-                  const next = e.target.checked;
-                  setIsPrivate(next);
-                  onUpdateTask(task.id, { isPrivate: next });
-                }}
-              />
-              <span>این وظیفه فقط برای خودم باشد</span>
-            </label>
-
-            <button
-              className="px-3 py-2 bg-red-600 text-white rounded-md text-sm"
+          <div className="flex items-center justify-between gap-3">
+            <Button
+              variant="destructive"
               onClick={() => {
-                if (task) {
-                  onDeleteTask(task.id);
-                  onOpenChange(false);
-                }
+                onDeleteTask(task.id);
+                onOpenChange(false);
               }}
             >
               حذف وظیفه
-            </button>
+            </Button>
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              بستن
+            </Button>
           </div>
         </div>
       </DialogContent>

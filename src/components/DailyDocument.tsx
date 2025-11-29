@@ -21,11 +21,12 @@ interface DailyDocumentProps {
   date: string;
   tasks: Task[];
   onTaskClick: (task: Task) => void;
-  onAddTask: (date: string) => void;
+  onAddTask?: (date: string) => void;
   isExpanded?: boolean;
   onToggleExpand?: () => void;
   onDeleteTask?: (taskId: string) => void;
   actionSlot?: ReactNode;
+  readOnly?: boolean;
 }
 
 export function DailyDocument({ 
@@ -36,7 +37,8 @@ export function DailyDocument({
   isExpanded = false,
   onToggleExpand,
   onDeleteTask,
-  actionSlot
+  actionSlot,
+  readOnly = false,
 }: DailyDocumentProps) {
   const completedTasks = tasks.filter(t => t.status === 'Completed');
   const inProgressTasks = tasks.filter(t => t.status === 'In Progress');
@@ -122,11 +124,7 @@ export function DailyDocument({
             </div>
           </div>
 
-          <Button
-            variant="ghost"
-            size="icon"
-            className="shrink-0"
-          >
+          <Button variant="ghost" size="icon" className="shrink-0">
             {isExpanded ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
           </Button>
         </div>
@@ -173,38 +171,44 @@ export function DailyDocument({
         <div className="px-6 pb-6 space-y-4 border-t border-gray-200/50">
           <div className="flex flex-wrap items-center justify-between gap-3 pt-4">
             <h3 className="text-gray-900 text-right">وظایف روز</h3>
-            <div className="flex items-center gap-2">
-              {actionSlot}
-              <Button
-                size="sm"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onAddTask(date);
-                }}
-                className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 gap-2"
-              >
-                <Plus className="w-4 h-4" />
-                افزودن وظیفه
-              </Button>
-            </div>
+            {!readOnly && (
+              <div className="flex items-center gap-2">
+                {actionSlot}
+                {onAddTask && (
+                  <Button
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onAddTask(date);
+                    }}
+                    className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 gap-2"
+                  >
+                    <Plus className="w-4 h-4" />
+                    افزودن وظیفه
+                  </Button>
+                )}
+              </div>
+            )}
           </div>
 
           {totalTasks === 0 ? (
             <div className="text-center py-8 bg-white/50 rounded-lg border-2 border-dashed border-gray-200">
               <TrendingUp className="w-12 h-12 text-gray-300 mx-auto mb-3" />
               <p className="text-gray-500 mb-3">هنوز وظیفه‌ای برای این روز ثبت نشده</p>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onAddTask(date);
-                }}
-                className="gap-2"
-              >
-                <Plus className="w-4 h-4" />
-                افزودن اولین وظیفه
-              </Button>
+              {!readOnly && onAddTask && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onAddTask(date);
+                  }}
+                  className="gap-2"
+                >
+                  <Plus className="w-4 h-4" />
+                  افزودن اولین وظیفه
+                </Button>
+              )}
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-3">
