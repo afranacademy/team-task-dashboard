@@ -5,13 +5,7 @@ import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
 import { Badge } from './ui/badge';
-import { Textarea } from './ui/textarea';
-import { Input } from './ui/input';
-import { Label } from './ui/label';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from './ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './ui/select';
-import { getStatusLabelFa } from '../lib/statusLabels';
-import { Plus, Calendar } from 'lucide-react';
+import { Plus, Calendar, Trash2, GripVertical } from 'lucide-react';
 import { supabase } from '../lib/supabaseClient';
 
 interface ProjectBoardTabProps {
@@ -23,6 +17,7 @@ interface ProjectBoardTabProps {
   today: string;
   onUpdateTask?: (taskId: string, updates: Partial<Task>) => Promise<void>;
   onAddProjectTask: () => void;
+  onDeleteTask?: (taskId: string) => Promise<void>;
 }
 
 export function ProjectBoardTab({
@@ -34,14 +29,23 @@ export function ProjectBoardTab({
   today,
   onUpdateTask,
   onAddProjectTask,
+  onDeleteTask,
 }: ProjectBoardTabProps) {
-  const [notes, setNotes] = useState('');
   const [draggedTask, setDraggedTask] = useState<Task | null>(null);
+  const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
 
-  const isOwner = project.ownerId === currentUser.id;
+  // Check if user is owner/admin
+  const isOwnerOrAdmin = useMemo(() => {
+    return project.ownerId === currentUser.id || 
+           currentUser.role === 'مدیر' || 
+           currentUser.role === 'admin' ||
+           currentUser.role === 'owner';
+  }, [project.ownerId, currentUser.id, currentUser.role]);
+
+  // Check if user can edit a specific task
   const canEditTask = (task: Task) => {
     const taskMember = tasksWithMembers.find(tm => tm.task.id === task.id)?.member;
-    return isOwner || (taskMember && taskMember.id === currentUser.id);
+    return isOwnerOrAdmin || (taskMember && taskMember.id === currentUser.id);
   };
 
   // Get ALL project tasks
@@ -113,9 +117,14 @@ export function ProjectBoardTab({
     e.dataTransfer.effectAllowed = 'move';
   };
 
-  const handleDragOver = (e: React.DragEvent) => {
+  const handleDragOver = (e: React.DragEvent, columnId: string) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = 'move';
+    setDragOverColumn(columnId);
+  };
+
+  const handleDragLeave = () => {
+    setDragOverColumn(null);
   };
 
   const handleDrop = async (
@@ -123,25 +132,51 @@ export function ProjectBoardTab({
     targetStatus: TaskStatus | 'today'
   ) => {
     e.preventDefault();
+    setDragOverColumn(null);
+    
     if (!draggedTask || !onUpdateTask) return;
 
-    const updates: Partial<Task> = {};
-    if (targetStatus === 'today') {
-      updates.date = today;
-      updates.status = draggedTask.status; // Keep current status
-    } else {
-      updates.status = targetStatus;
-      if (targetStatus === 'Completed') {
-        updates.progress = 100;
-      } else if (targetStatus === 'In Progress') {
-        updates.progress = 50;
-      } else if (targetStatus === 'To Do') {
-        updates.progress = 0;
+    try {
+      const updates: Partial<Task> = {};
+      
+      if (targetStatus === 'today') {
+        // Moving to "Today" column
+        updates.date = today;
+        // Keep current status or set to In Progress if it was To Do
+        updates.status = draggedTask.status === 'To Do' ? 'In Progress' : draggedTask.status;
+      } else {
+        // Moving to status columns
+        updates.status = targetStatus;
+        if (targetStatus === 'Completed') {
+          updates.progress = 100;
+        } else if (targetStatus === 'In Progress') {
+          updates.progress = 50;
+        } else if (targetStatus === 'To Do') {
+          updates.progress = 0;
+        }
       }
-    }
 
-    await onUpdateTask(draggedTask.id, updates);
-    setDraggedTask(null);
+      await onUpdateTask(draggedTask.id, updates);
+    } catch (error) {
+      console.error('[ProjectBoardTab] Error updating task:', error);
+      alert('خطا در به‌روزرسانی وظیفه. لطفاً دوباره تلاش کنید.');
+    } finally {
+      setDraggedTask(null);
+    }
+  };
+
+  const handleDeleteTask = async (taskId: string) => {
+    if (!onDeleteTask) return;
+    
+    const confirmed = window.confirm('آیا مطمئن هستید که می‌خواهید این وظیفه را حذف کنید؟');
+    if (!confirmed) return;
+
+    try {
+      await onDeleteTask(taskId);
+    } catch (error) {
+      console.error('[ProjectBoardTab] Error deleting task:', error);
+      alert('خطا در حذف وظیفه. لطفاً دوباره تلاش کنید.');
+    }
   };
 
   const getPriorityBadge = (task: Task) => {
@@ -167,17 +202,46 @@ export function ProjectBoardTab({
   const TaskCard = ({ task }: { task: Task }) => {
     const member = allProjectTasks.find(tm => tm.task.id === task.id)?.member;
     const canDrag = canEditTask(task);
+    const canDelete = canEditTask(task);
 
     return (
       <Card
         draggable={canDrag}
         onDragStart={(e) => canDrag && handleDragStart(e, task)}
-        className={`p-3 mb-2 ${canDrag ? 'cursor-move hover:border-purple-300 hover:shadow-md' : 'cursor-not-allowed opacity-60'} transition-all bg-white border border-gray-200`}
+        className={`group p-3 mb-2 ${
+          canDrag 
+            ? 'cursor-move hover:border-purple-300 hover:shadow-lg' 
+            : 'cursor-not-allowed opacity-50'
+        } transition-all bg-white border border-gray-200 ${
+          draggedTask?.id === task.id ? 'opacity-50 scale-95' : ''
+        }`}
       >
         <div className="text-right">
           <div className="flex items-start justify-between gap-2 mb-2">
-            <h4 className="text-sm font-semibold text-gray-900 flex-1">{task.title}</h4>
-            {getPriorityBadge(task)}
+            <div className="flex items-center gap-1 flex-1">
+              {canDrag && (
+                <GripVertical className="w-3 h-3 text-gray-400 flex-shrink-0" />
+              )}
+              <h4 className="text-sm font-semibold text-gray-900 line-clamp-1 flex-1">
+                {task.title}
+              </h4>
+            </div>
+            <div className="flex items-center gap-1">
+              {getPriorityBadge(task)}
+              {canDelete && onDeleteTask && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleDeleteTask(task.id);
+                  }}
+                  className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-50 hover:text-red-600"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </Button>
+              )}
+            </div>
           </div>
 
           {task.description && (
@@ -189,15 +253,18 @@ export function ProjectBoardTab({
           <div className="flex items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               {member && (
-                <Avatar className="h-6 w-6 border border-gray-200">
-                  {member.avatarUrl && <AvatarImage src={member.avatarUrl} alt={member.name} />}
-                  <AvatarFallback className="bg-gradient-to-br from-purple-400 to-blue-500 text-white text-xs">
-                    {member.initials}
-                  </AvatarFallback>
-                </Avatar>
+                <>
+                  <Avatar className="h-6 w-6 border border-gray-200">
+                    {member.avatarUrl && <AvatarImage src={member.avatarUrl} alt={member.name} />}
+                    <AvatarFallback className="bg-gradient-to-br from-purple-400 to-blue-500 text-white text-xs">
+                      {member.initials}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span className="text-xs text-gray-700 font-medium">{member.name}</span>
+                </>
               )}
             </div>
-            <div className="flex items-center gap-2 text-xs text-gray-500">
+            <div className="flex items-center gap-1 text-xs text-gray-500">
               <Calendar className="w-3 h-3" />
               <span>{formatJalaliDate(task.date)}</span>
             </div>
@@ -211,34 +278,44 @@ export function ProjectBoardTab({
     title,
     tasks,
     status,
+    columnId,
   }: {
     title: string;
     tasks: Task[];
     status: TaskStatus | 'today';
-  }) => (
-    <Card
-      className="p-4 border-gray-200 min-h-[500px] bg-gray-50"
-      onDragOver={handleDragOver}
-      onDrop={(e) => handleDrop(e, status)}
-    >
-      <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-200">
-        <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
-        <Badge variant="secondary" className="text-xs font-medium">
-          {tasks.length}
-        </Badge>
-      </div>
-      <div className="space-y-2 max-h-[600px] overflow-y-auto">
-        {tasks.length === 0 ? (
-          <div className="text-center py-12 text-xs text-muted-foreground">
-            <div className="text-gray-400 mb-2">خالی</div>
-            <div className="text-gray-300 text-[10px]">کارها را اینجا بکشید</div>
-          </div>
-        ) : (
-          tasks.map(task => <TaskCard key={task.id} task={task} />)
-        )}
-      </div>
-    </Card>
-  );
+    columnId: string;
+  }) => {
+    const isOver = dragOverColumn === columnId;
+    
+    return (
+      <Card
+        className={`p-4 border-gray-200 min-h-[500px] transition-all ${
+          isOver ? 'bg-purple-50 border-purple-300 shadow-lg' : 'bg-gray-50'
+        }`}
+        onDragOver={(e) => handleDragOver(e, columnId)}
+        onDragLeave={handleDragLeave}
+        onDrop={(e) => handleDrop(e, status)}
+      >
+        <div className="flex items-center justify-between mb-4 pb-2 border-b border-gray-200">
+          <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
+          <Badge variant="secondary" className="text-xs font-medium">
+            {tasks.length}
+          </Badge>
+        </div>
+        <div className="space-y-2 max-h-[600px] overflow-y-auto">
+          {tasks.length === 0 ? (
+            <div className="text-center py-12 text-xs text-muted-foreground">
+              <div className="text-4xl mb-2">📋</div>
+              <div className="text-gray-400 mb-1">خالی</div>
+              <div className="text-gray-300 text-[10px]">کارها را اینجا بکشید</div>
+            </div>
+          ) : (
+            tasks.map(task => <TaskCard key={task.id} task={task} />)
+          )}
+        </div>
+      </Card>
+    );
+  };
 
   return (
     <div className="space-y-6" dir="rtl">
@@ -254,22 +331,11 @@ export function ProjectBoardTab({
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Column title="وظایف امروز من" tasks={todayTasks} status="today" />
-        <Column title="باید انجام بشه" tasks={todoTasks} status="To Do" />
-        <Column title="در حال انجام" tasks={inProgressTasks} status="In Progress" />
-        <Column title="انجام شده" tasks={completedTasks} status="Completed" />
+        <Column title="وظایف امروز من" tasks={todayTasks} status="today" columnId="today" />
+        <Column title="باید انجام بشه" tasks={todoTasks} status="To Do" columnId="todo" />
+        <Column title="در حال انجام" tasks={inProgressTasks} status="In Progress" columnId="in-progress" />
+        <Column title="انجام شده" tasks={completedTasks} status="Completed" columnId="completed" />
       </div>
-
-      <Card className="p-4 border-gray-200">
-        <label className="text-sm font-medium text-gray-900 mb-2 block">یادداشت‌ها</label>
-        <Textarea
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          placeholder="یادداشت‌های خود را اینجا بنویسید..."
-          className="min-h-[100px] text-right"
-          dir="rtl"
-        />
-      </Card>
     </div>
   );
 }

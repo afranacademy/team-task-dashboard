@@ -846,8 +846,9 @@ export default function App() {
           onSelectedDateChange={setSelectedDate}
           onBack={handleBackToPersonalFromProjects}
           onTaskClick={handleTaskClick}
-          onAddProjectTask={handleAddProjectTaskDialogOpen}
+          onAddProjectTask={handleAddProjectTask}
           onUpdateTask={handleUpdateTask}
+          onDeleteTask={handleDeleteTask}
         />
 
         <TaskDetailModal

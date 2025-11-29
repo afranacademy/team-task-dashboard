@@ -20,8 +20,21 @@ interface ProjectDetailViewProps {
   onSelectedDateChange: (date: string) => void;
   onBack: () => void;
   onTaskClick: (task: Task) => void;
-  onAddProjectTask: () => void;
+  onAddProjectTask: (data: {
+    assigneeId: string;
+    title: string;
+    description: string;
+    status: import('./types').TaskStatus;
+    expectedOutcome: string;
+    deadline?: string;
+    date?: string;
+    start_date?: string;
+    end_date?: string;
+    isPrivate?: boolean;
+    priority?: 'low' | 'medium' | 'high';
+  }) => void | Promise<void>;
   onUpdateTask?: (taskId: string, updates: Partial<Task>) => Promise<void>;
+  onDeleteTask?: (taskId: string) => Promise<void>;
 }
 
 // ProjectHeader Component
@@ -102,6 +115,7 @@ export function ProjectDetailView({
   onTaskClick,
   onAddProjectTask,
   onUpdateTask,
+  onDeleteTask,
 }: ProjectDetailViewProps) {
   const getLocalToday = () => new Date().toLocaleDateString('en-CA');
   const today = getLocalToday();
@@ -152,6 +166,7 @@ export function ProjectDetailView({
               tasksWithMembers={tasksWithMembers}
               allMembers={allMembers}
               onTaskClick={onTaskClick}
+              onAddTask={onAddProjectTask}
             />
           </TabsContent>
 
@@ -165,6 +180,7 @@ export function ProjectDetailView({
               today={today}
               onUpdateTask={onUpdateTask}
               onAddProjectTask={onAddProjectTask}
+              onDeleteTask={onDeleteTask}
             />
           </TabsContent>
 
