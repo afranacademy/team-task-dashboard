@@ -20,6 +20,7 @@ interface DashboardSidebarProps {
   onEditProfile: () => void;
   onLogout: () => void;
   onOpenProjects: () => void;
+  onOpenCalendar: () => void;
 }
 
 const moodOptions: { value: Mood; emoji: string; label: string }[] = [
@@ -44,6 +45,7 @@ export function DashboardSidebar({
   onEditProfile,
   onLogout,
   onOpenProjects,
+  onOpenCalendar,
 }: DashboardSidebarProps) {
   const accessStatus = currentUser.accessPermissions.length > 0 ? 'عمومی' : 'خصوصی';
 
@@ -100,7 +102,10 @@ export function DashboardSidebar({
               <FolderKanban className="w-5 h-5" />
               <span>پروژه‌ها</span>
             </button>
-            <button className="flex items-center gap-3 px-4 py-2.5 rounded-lg hover:bg-accent transition-colors text-right">
+            <button
+              className="flex items-center gap-3 px-4 py-2.5 rounded-lg hover:bg-accent transition-colors text-right"
+              onClick={onOpenCalendar}
+            >
               <CalendarIcon className="w-5 h-5" />
               <span>تقویم</span>
             </button>

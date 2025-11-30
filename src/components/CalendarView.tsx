@@ -1,56 +1,36 @@
-// src/components/CalendarView.tsx
-import { useEffect, useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Search, Plus } from "lucide-react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type MouseEvent,
+} from "react";
+import { ChevronLeft, ChevronRight, Plus, Search } from "lucide-react";
 
-import { supabase } from "../lib/supabaseClient";
-import { Task, Project, TeamMember } from "../types";
-import { toJalali } from "../utils/jalaliUtils";
-
-import { Button } from "./ui/button";
-import { Input } from "./ui/input";
-import { Label } from "./ui/label";
-import { Checkbox } from "./ui/checkbox";
+import { supabase } from "@/lib/supabaseClient";
+import { Task, TaskStatus, Project, TeamMember } from "@/types";
+import { toJalali } from "@/utils/dateUtils";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "./ui/dialog";
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "./ui/select";
-import { Textarea } from "./ui/textarea";
-
-type CalendarTask = Task & {
-  // این‌ها برای این است که اگر در type اصلی نبودند، خطای TS نگیری
-  start_time?: string | null;
-  end_time?: string | null;
-  start_date?: string | null;
-  end_date?: string | null;
-  priority?: "low" | "medium" | "high";
-  project_id?: string | null;
-  projectName?: string;
-  projectColor?: string;
-};
-
-type CalendarDay = {
-  date: string; // YYYY-MM-DD
-  jalaliDate: { year: number; month: number; day: number };
-  isCurrentMonth: boolean;
-  isToday: boolean;
-  tasks: CalendarTask[];
-};
-
-type ViewMode = "day" | "week" | "month";
-
-type CalendarViewProps = {
-  currentUser: TeamMember;
-};
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 
 const JALALI_MONTH_NAMES = [
   "فروردین",
@@ -67,8 +47,7 @@ const JALALI_MONTH_NAMES = [
   "اسفند",
 ];
 
-const JALALI_DAY_LETTERS = ["ش", "ی", "د", "س", "چ", "پ", "ج"];
-const JALALI_DAY_FULL = [
+const WEEKDAY_FULL = [
   "شنبه",
   "یکشنبه",
   "دوشنبه",
@@ -78,54 +57,112 @@ const JALALI_DAY_FULL = [
   "جمعه",
 ];
 
+const WEEKDAY_SHORT = ["ش", "ی", "د", "س", "چ", "پ", "ج"];
+
+const PROJECT_STATUS_COLORS: Record<string, string> = {
+  active: "#10b981",
+  completed: "#6b7280",
+  on_hold: "#facc15",
+  planning: "#3b82f6",
+};
+
+const DEFAULT_PROJECT_COLOR = "#6366f1";
+
+type CalendarProject = Project & {
+  status?: string | null;
+};
+
+type CalendarTask = Task & {
+  project_id?: string | null;
+  projectName?: string;
+  projectColor?: string;
+  start_time?: string | null;
+  end_time?: string | null;
+};
+
+type CalendarDay = {
+  date: string;
+  jalaliDate: { year: number; month: number; day: number };
+  isCurrentMonth: boolean;
+  isToday: boolean;
+  tasks: CalendarTask[];
+};
+
+type ViewMode = "day" | "week" | "month";
+
+type CalendarViewProps = {
+  currentUser: TeamMember;
+};
+
+type SupabaseTaskRow = {
+  id: string;
+  title: string;
+  description?: string | null;
+  date: string;
+  start_date?: string | null;
+  end_date?: string | null;
+  start_time?: string | null;
+  end_time?: string | null;
+  priority?: "low" | "medium" | "high" | null;
+  status?: TaskStatus | null;
+  project_id?: string | null;
+  expected_outcome?: string | null;
+  progress?: number | null;
+  comments?: string[] | null;
+  is_private?: boolean | null;
+};
+
+type SupabaseProjectRow = {
+  id: string;
+  name: string;
+  description?: string | null;
+  owner_id?: string | null;
+  created_at?: string | null;
+  status?: string | null;
+};
+
+const normalizeDate = (date: Date) => date.toISOString().split("T")[0];
+
+const parseIsoDateToLocal = (value: string) => {
+  const [year, month, day] = value.split("-").map(Number);
+  return new Date(year, month - 1, day);
+};
+
+const saturdayFirstIndex = (day: number) => (day === 6 ? 0 : day + 1);
+
+const getProjectColor = (status?: string | null) => {
+  if (!status) return DEFAULT_PROJECT_COLOR;
+  return PROJECT_STATUS_COLORS[status.toLowerCase()] ?? DEFAULT_PROJECT_COLOR;
+};
+
 export function CalendarView({ currentUser }: CalendarViewProps) {
   const [tasks, setTasks] = useState<CalendarTask[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
+  const [projects, setProjects] = useState<CalendarProject[]>([]);
   const [visibleProjects, setVisibleProjects] = useState<Set<string>>(
     () => new Set()
   );
-  const [loading, setLoading] = useState(true);
-
+  const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [viewMode, setViewMode] = useState<ViewMode>("month");
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-
+  const [selectedDate, setSelectedDate] = useState(() => new Date());
   const [showEventModal, setShowEventModal] = useState(false);
   const [selectedTask, setSelectedTask] = useState<CalendarTask | null>(null);
+  const initializedFiltersRef = useRef(false);
 
-  const [formData, setFormData] = useState<{
-    title: string;
-    description: string;
-    date: string;
-    start_time: string;
-    end_time: string;
-    is_all_day: boolean;
-    priority: "low" | "medium" | "high";
-    project_id: string | null;
-  }>({
+  const [formData, setFormData] = useState({
     title: "",
     description: "",
-    date: new Date().toISOString().split("T")[0],
+    date: normalizeDate(new Date()),
     start_time: "",
     end_time: "",
     is_all_day: false,
-    priority: "medium",
-    project_id: null,
+    priority: "medium" as Task["priority"],
+    project_id: null as string | null,
   });
 
-  const jalaliSelected = useMemo(
-    () => toJalali(selectedDate),
-    [selectedDate]
-  );
+  const jalaliSelected = useMemo(() => toJalali(selectedDate), [selectedDate]);
 
-  // ---------- Fetch data from Supabase ----------
-
-  useEffect(() => {
-    fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentUser.id, selectedDate]);
-
-  async function fetchData() {
+  const loadCalendarData = useCallback(async () => {
     setLoading(true);
     try {
       const startOfMonth = new Date(
@@ -144,211 +181,218 @@ export function CalendarView({ currentUser }: CalendarViewProps) {
       const bufferEnd = new Date(endOfMonth);
       bufferEnd.setDate(bufferEnd.getDate() + 7);
 
-      const from = bufferStart.toISOString().split("T")[0];
-      const to = bufferEnd.toISOString().split("T")[0];
-
-      const { data: tasksData, error: tasksError } = await supabase
+      const { data: rawTasks, error: tasksError } = await supabase
         .from("tasks")
         .select("*")
         .eq("member_id", currentUser.id)
-        .gte("date", from)
-        .lte("date", to);
+        .gte("date", normalizeDate(bufferStart))
+        .lte("date", normalizeDate(bufferEnd));
 
       if (tasksError) throw tasksError;
 
+      const taskRows = (rawTasks ?? []) as SupabaseTaskRow[];
       const projectIds = Array.from(
         new Set(
-          (tasksData || [])
-            .map((t: any) => t.project_id)
-            .filter((id: any): id is string => Boolean(id))
+          taskRows
+            .map(row => row.project_id)
+            .filter((id): id is string => Boolean(id))
         )
       );
 
-      let projectsData: Project[] = [];
+      let projectRows: SupabaseProjectRow[] = [];
       if (projectIds.length > 0) {
-        const { data, error: projectsError } = await supabase
+        const { data: rawProjects, error: projectsError } = await supabase
           .from("projects")
           .select("*")
           .in("id", projectIds);
 
         if (projectsError) throw projectsError;
-        projectsData = data || [];
+        projectRows = (rawProjects ?? []) as SupabaseProjectRow[];
       }
 
-      const enriched: CalendarTask[] = (tasksData || []).map((task: any) => {
-        const project = projectsData.find((p) => p.id === task.project_id);
+      const projectMap = new Map<string, CalendarProject>();
+      const mappedProjects = projectRows.map(row => {
+        const project: CalendarProject = {
+          id: String(row.id),
+          name: row.name,
+          description: row.description ?? undefined,
+          ownerId: row.owner_id ? String(row.owner_id) : undefined,
+          createdAt: row.created_at ?? undefined,
+          status: row.status ?? undefined,
+        };
+        projectMap.set(project.id, project);
+        return project;
+      });
+
+      const enrichedTasks: CalendarTask[] = taskRows.map(row => {
+        const projectId = row.project_id ?? undefined;
+        const project = projectId ? projectMap.get(projectId) : undefined;
+
         return {
-          ...task,
+          id: String(row.id),
+          title: row.title,
+          description: row.description ?? "",
+          status: (row.status as TaskStatus) ?? "To Do",
+          progress: typeof row.progress === "number" ? row.progress : 0,
+          expectedOutcome: row.expected_outcome ?? "",
+          deadline: row.deadline ?? undefined,
+          date: row.date,
+          start_date: row.start_date ?? null,
+          end_date: row.end_date ?? null,
+          start_time: row.start_time ?? null,
+          end_time: row.end_time ?? null,
+          comments: row.comments ?? [],
+          isPrivate: row.is_private ?? !projectId,
+          projectId,
+          project_id: projectId ?? null,
+          priority: (row.priority ?? "medium") as Task["priority"],
           projectName: project?.name,
-          projectColor: getProjectColor(project),
+          projectColor: getProjectColor(project?.status),
         };
       });
 
-      setTasks(enriched);
-      setProjects(projectsData);
+      setTasks(enrichedTasks);
+      setProjects(mappedProjects);
 
-      if (visibleProjects.size === 0 && projectIds.length > 0) {
-        setVisibleProjects(new Set<string>(projectIds));
+      if (!initializedFiltersRef.current && projectIds.length > 0) {
+        setVisibleProjects(new Set(projectIds));
+        initializedFiltersRef.current = true;
       }
-    } catch (err) {
-      console.error("Error loading calendar data", err);
+    } catch (error) {
+      console.error("Error loading calendar data", error);
     } finally {
       setLoading(false);
     }
-  }
+  }, [currentUser.id, selectedDate]);
 
-  function getProjectColor(project?: Project) {
-    if (!project) return "#6366f1";
-    const status = (project as any).status || "active";
-    const colors: Record<string, string> = {
-      active: "#10b981",
-      planning: "#3b82f6",
-      completed: "#6b7280",
-      on_hold: "#f59e0b",
-    };
-      // @ts-ignore
-    return colors[status] || "#6366f1";
-  }
+  useEffect(() => {
+    void loadCalendarData();
+  }, [loadCalendarData]);
 
-  // ---------- Calendar generation ----------
-
-  const calendarDays: CalendarDay[] = useMemo(() => {
-    const days: CalendarDay[] = [];
-
-    const first = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), 1);
-    const last = new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 0);
-
-    // در JS: 0=Sunday, 6=Saturday
-    let startDay = first.getDay(); // 0..6
-    // می‌خوایم شنبه رو ستون اول کنیم
-    startDay = startDay === 6 ? 0 : startDay + 1;
-
-    const prevStart = new Date(first);
-    prevStart.setDate(prevStart.getDate() - startDay);
-
-    // روزهای قبل از ماه
-    for (let i = 0; i < startDay; i++) {
-      const d = new Date(prevStart);
-      d.setDate(d.getDate() + i);
-      days.push(createCalendarDay(d, false));
-    }
-
-    // خود ماه
-    for (let day = 1; day <= last.getDate(); day++) {
-      const d = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), day);
-      days.push(createCalendarDay(d, true));
-    }
-
-    // روزهای بعد برای پر شدن ۶×۷
-    const remaining = 42 - days.length;
-    for (let i = 1; i <= remaining; i++) {
-      const d = new Date(last);
-      d.setDate(d.getDate() + i);
-      days.push(createCalendarDay(d, false));
-    }
-
-    return days;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedDate, tasks, searchQuery, visibleProjects]);
-
-  function createCalendarDay(date: Date, isCurrentMonth: boolean): CalendarDay {
-    const dateStr = date.toISOString().split("T")[0];
-    const jalali = toJalali(date);
+  const calendarDays = useMemo(() => {
+    const searchTerm = searchQuery.trim().toLowerCase();
+    const startOfMonth = new Date(
+      selectedDate.getFullYear(),
+      selectedDate.getMonth(),
+      1
+    );
+    const baseDay = new Date(startOfMonth);
+    const offset = saturdayFirstIndex(startOfMonth.getDay());
+    baseDay.setDate(baseDay.getDate() - offset);
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    const cmp = new Date(date);
-    cmp.setHours(0, 0, 0, 0);
 
-    const dayTasks = tasks.filter((task) => {
-      if (task.project_id && !visibleProjects.has(task.project_id)) return false;
-      if (
-        searchQuery &&
-        !task.title?.toLowerCase().includes(searchQuery.toLowerCase())
-      )
+    return Array.from({ length: 42 }).map((_, index) => {
+      const day = new Date(baseDay);
+      day.setDate(baseDay.getDate() + index);
+      const dateString = normalizeDate(day);
+      const dayTasks = tasks.filter(task => {
+        if (task.project_id && !visibleProjects.has(task.project_id)) {
+          return false;
+        }
+
+        if (
+          searchTerm &&
+          !task.title.toLowerCase().includes(searchTerm)
+        ) {
+          return false;
+        }
+
+        if (task.date === dateString) return true;
+        if (task.start_date && task.end_date) {
+          return dateString >= task.start_date && dateString <= task.end_date;
+        }
+
         return false;
+      });
 
-      if (task.date === dateStr) return true;
+      const normalizedDay = new Date(day);
+      normalizedDay.setHours(0, 0, 0, 0);
 
-      if (task.start_date && task.end_date) {
-        return dateStr >= task.start_date && dateStr <= task.end_date;
-      }
-
-      return false;
+      return {
+        date: dateString,
+        jalaliDate: toJalali(day),
+        isCurrentMonth: day.getMonth() === selectedDate.getMonth(),
+        isToday: normalizedDay.getTime() === today.getTime(),
+        tasks: dayTasks,
+      };
     });
+  }, [selectedDate, tasks, searchQuery, visibleProjects]);
 
-    return {
-      date: dateStr,
-      jalaliDate: jalali,
-      isCurrentMonth,
-      isToday: cmp.getTime() === today.getTime(),
-      tasks: dayTasks,
-    };
-  }
+  const handlePrevMonth = () => {
+    setSelectedDate(prev => {
+      const next = new Date(prev);
+      next.setMonth(prev.getMonth() - 1);
+      next.setDate(1);
+      return next;
+    });
+  };
 
-  // ---------- Navigation ----------
+  const handleNextMonth = () => {
+    setSelectedDate(prev => {
+      const next = new Date(prev);
+      next.setMonth(prev.getMonth() + 1);
+      next.setDate(1);
+      return next;
+    });
+  };
 
-  function handlePrevMonth() {
-    setSelectedDate(
-      new Date(selectedDate.getFullYear(), selectedDate.getMonth() - 1, 1)
-    );
-  }
-
-  function handleNextMonth() {
-    setSelectedDate(
-      new Date(selectedDate.getFullYear(), selectedDate.getMonth() + 1, 1)
-    );
-  }
-
-  function handleToday() {
+  const handleToday = () => {
     setSelectedDate(new Date());
-  }
+  };
 
-  // ---------- Modal helpers ----------
-
-  function openNewEventModal(date?: string) {
+  const openNewEventModal = (date?: string) => {
     setSelectedTask(null);
-    setFormData({
+    setFormData(prev => ({
+      ...prev,
       title: "",
       description: "",
-      date: date || new Date().toISOString().split("T")[0],
+      date: date ?? normalizeDate(new Date()),
       start_time: "",
       end_time: "",
       is_all_day: false,
       priority: "medium",
       project_id: null,
-    });
+    }));
     setShowEventModal(true);
-  }
+  };
 
-  function openEditEventModal(task: CalendarTask) {
+  const openEditEventModal = (task: CalendarTask) => {
     setSelectedTask(task);
     setFormData({
       title: task.title,
-      description: (task.description as string) || "",
+      description: task.description,
       date: task.date,
-      start_time: task.start_time || "",
-      end_time: task.end_time || "",
+      start_time: task.start_time ?? "",
+      end_time: task.end_time ?? "",
       is_all_day: !task.start_time && !task.end_time,
-      priority: (task.priority as any) || "medium",
+      priority: task.priority ?? "medium",
       project_id: task.project_id ?? null,
     });
     setShowEventModal(true);
-  }
+  };
 
-  async function handleSaveEvent() {
+  const handleEventModalChange = (open: boolean) => {
+    setShowEventModal(open);
+    if (!open) {
+      setSelectedTask(null);
+    }
+  };
+
+  const handleSaveEvent = async () => {
     if (!formData.title.trim()) return;
 
-    const payload: any = {
-      title: formData.title,
-      description: formData.description || null,
+    const payload = {
+      title: formData.title.trim(),
+      description: formData.description.trim() || null,
       date: formData.date,
       start_time: formData.is_all_day ? null : formData.start_time || null,
       end_time: formData.is_all_day ? null : formData.end_time || null,
       priority: formData.priority,
       project_id: formData.project_id,
       member_id: currentUser.id,
-      status: (selectedTask?.status as any) || "todo",
+      status: (selectedTask?.status as TaskStatus) ?? "To Do",
       is_private: !formData.project_id,
     };
 
@@ -365,16 +409,17 @@ export function CalendarView({ currentUser }: CalendarViewProps) {
       }
 
       setShowEventModal(false);
-      fetchData();
-    } catch (err) {
-      console.error("Error saving task", err);
-      alert("خطا در ذخیره رویداد");
+      await loadCalendarData();
+    } catch (error) {
+      console.error("Error saving task", error);
     }
-  }
+  };
 
-  async function handleDeleteEvent() {
+  const handleDeleteEvent = async () => {
     if (!selectedTask) return;
-    if (!confirm("این رویداد حذف شود؟")) return;
+    if (!window.confirm("آیا مطمئن هستید که می‌خواهید این رویداد حذف شود؟")) {
+      return;
+    }
 
     try {
       const { error } = await supabase
@@ -382,464 +427,485 @@ export function CalendarView({ currentUser }: CalendarViewProps) {
         .delete()
         .eq("id", selectedTask.id);
       if (error) throw error;
+
       setShowEventModal(false);
-      fetchData();
-    } catch (err) {
-      console.error("Error deleting task", err);
-      alert("خطا در حذف رویداد");
+      await loadCalendarData();
+    } catch (error) {
+      console.error("Error deleting task", error);
     }
-  }
+  };
 
-  function toggleProjectVisibility(projectId: string) {
-    const next = new Set(visibleProjects);
-    if (next.has(projectId)) next.delete(projectId);
-    else next.add(projectId);
-    setVisibleProjects(next);
-  }
+  const handleDayCellClick = (date: string) => {
+    setSelectedDate(parseIsoDateToLocal(date));
+    openNewEventModal(date);
+  };
 
-  // ---------- Mini calendar ----------
+  const handleProjectRowClick = (
+    event: MouseEvent<HTMLDivElement>,
+    projectId: string
+  ) => {
+    const target = event.target as HTMLElement;
+    if (target.closest("[data-slot='checkbox']")) {
+      return;
+    }
 
-  function renderMiniCalendar() {
-    const miniDays = calendarDays; // برای سادگی از همون آرایه استفاده می‌کنیم
+    toggleProjectVisibility(projectId);
+  };
 
-    return (
-      <div className="space-y-2">
-        <div className="grid grid-cols-7 gap-1 text-center text-xs">
-          {JALALI_DAY_LETTERS.map((d) => (
-            <div key={d} className="font-medium text-muted-foreground">
-              {d}
-            </div>
-          ))}
-        </div>
-        <div className="grid grid-cols-7 gap-1">
-          {miniDays.map((day, idx) => {
-            const hasEvents = day.tasks.length > 0;
+  const toggleProjectVisibility = (projectId: string) => {
+    setVisibleProjects(prev => {
+      const next = new Set(prev);
+      if (next.has(projectId)) {
+        next.delete(projectId);
+      } else {
+        next.add(projectId);
+      }
+      return next;
+    });
+  };
 
-            return (
-              <button
-                key={idx}
-                onClick={() => {
-                  const [y, m, d] = day.date.split("-").map(Number);
-                  setSelectedDate(new Date(y, m - 1, d));
-                }}
-                className={[
-                  "aspect-square text-xs rounded-md transition-colors",
-                  !day.isCurrentMonth ? "text-muted-foreground/40" : "",
-                  day.isToday
-                    ? "bg-primary text-primary-foreground font-bold"
-                    : "",
-                  !day.isToday && day.isCurrentMonth ? "hover:bg-accent" : "",
-                  hasEvents && !day.isToday ? "font-semibold" : "",
-                ].join(" ")}
-              >
-                {day.jalaliDate.day}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    );
-  }
-
-  // ---------- Render ----------
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-full" dir="rtl">
-        <div className="text-lg text-muted-foreground">در حال بارگذاری...</div>
-      </div>
-    );
-  }
+  const formSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    void handleSaveEvent();
+  };
 
   return (
-    <div className="flex h-full overflow-hidden bg-background" dir="rtl">
-      {/* Sidebar */}
-      <div className="w-80 border-l border-border bg-card p-6 overflow-y-auto">
-        <div className="space-y-6">
-          {/* Mini calendar */}
-          <div>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold">
-                {JALALI_MONTH_NAMES[jalaliSelected.month - 1]}{" "}
-                {jalaliSelected.year}
-              </h3>
-              <div className="flex gap-1">
+    <div
+      dir="rtl"
+      className="flex min-h-screen w-full flex-col bg-gradient-to-b from-slate-50 via-white to-slate-50 px-4 py-6"
+    >
+      <div className="mx-auto flex w-full max-w-[1280px] gap-4">
+        <aside className="flex w-80 flex-col gap-6 rounded-2xl border border-border bg-background/80 p-4 shadow-sm">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="text-sm font-semibold text-foreground">
+                {JALALI_MONTH_NAMES[jalaliSelected.month - 1]} {jalaliSelected.year}
+              </div>
+              <div className="flex items-center gap-1">
                 <Button
+                  type="button"
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8"
-                  onClick={handleNextMonth}
+                  onClick={handlePrevMonth}
+                  aria-label="ماه قبل"
                 >
-                  <ChevronRight className="h-4 w-4" />
+                  <ChevronLeft />
                 </Button>
                 <Button
+                  type="button"
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8"
-                  onClick={handlePrevMonth}
+                  onClick={handleNextMonth}
+                  aria-label="ماه بعد"
                 >
-                  <ChevronLeft className="h-4 w-4" />
+                  <ChevronRight />
                 </Button>
               </div>
             </div>
-            {renderMiniCalendar()}
+
+            <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              {WEEKDAY_SHORT.map((letter, index) => (
+                <span key={index}>{letter}</span>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-7 gap-1 text-center text-sm">
+              {calendarDays.map(day => (
+                <button
+                  key={day.date}
+                  type="button"
+                  onClick={() => setSelectedDate(parseIsoDateToLocal(day.date))}
+                  className={[
+                    "flex h-10 items-center justify-center rounded-lg transition",
+                    day.isToday ? "bg-primary text-primary-foreground" : "",
+                    !day.isCurrentMonth ? "text-muted-foreground opacity-60" : "",
+                    day.tasks.length > 0 ? "font-semibold" : "font-normal",
+                  ].join(" ")}
+                >
+                  {day.jalaliDate.day}
+                </button>
+              ))}
+            </div>
           </div>
 
-          {/* Search */}
-          <div className="relative">
-            <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="جستجوی رویدادها..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pr-9"
-            />
+          <div className="space-y-2">
+            <Label className="text-right text-sm font-semibold">جستجوی رویدادها</Label>
+            <div className="relative">
+              <div className="pointer-events-none absolute inset-y-0 left-3 flex items-center">
+                <Search className="size-4 text-muted-foreground" />
+              </div>
+              <Input
+                value={searchQuery}
+                onChange={event => setSearchQuery(event.target.value)}
+                placeholder="عنوان، پروژه یا کلمه کلیدی"
+                className="pr-10 text-right"
+              />
+            </div>
           </div>
 
-          {/* Calendars */}
-          <div>
-            <h3 className="font-semibold mb-3">تقویم‌های من</h3>
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <span>تقویم‌های من</span>
+            </div>
             <div className="space-y-2">
-              <label className="flex items-center gap-2 cursor-pointer hover:bg-accent p-2 rounded-md">
-                <Checkbox checked disabled />
+              <div className="flex items-center gap-2 rounded-lg px-2 py-1 text-sm font-semibold text-foreground">
+                <span className="h-2.5 w-2.5 rounded-full bg-slate-400" />
+                <span>وظایف شخصی</span>
+              </div>
+              {projects.map(project => (
                 <div
-                  className="w-3 h-3 rounded-full"
-                  style={{ backgroundColor: "#6366f1" }}
-                />
-                <span className="text-sm">وظایف شخصی</span>
-              </label>
-              {projects.map((p) => (
-                <label
-                  key={p.id}
-                  className="flex items-center gap-2 cursor-pointer hover:bg-accent p-2 rounded-md"
+                  key={project.id}
+                  className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1 transition hover:bg-accent/30"
+                  onClick={event => handleProjectRowClick(event, project.id)}
+                  role="button"
+                  tabIndex={0}
                 >
                   <Checkbox
-                    checked={visibleProjects.has(p.id)}
-                    onCheckedChange={(checked: boolean) => toggleProjectVisibility(p.id)}
+                    checked={visibleProjects.has(project.id)}
+                    onCheckedChange={() => toggleProjectVisibility(project.id)}
                   />
-                  <div
-                    className="w-3 h-3 rounded-full"
-                    style={{ backgroundColor: getProjectColor(p) }}
+                  <span
+                    className="h-2.5 w-2.5 rounded-full"
+                    style={{ backgroundColor: getProjectColor(project.status) }}
                   />
-                  <span className="text-sm">{p.name}</span>
-                </label>
+                  <span className="text-sm font-medium">{project.name}</span>
+                </div>
               ))}
             </div>
           </div>
 
           <Button
-            variant="outline"
-            className="w-full"
-            onClick={() => openNewEventModal()}
+            type="button"
+            variant="secondary"
+            size="default"
+            className="mt-auto flex w-full items-center justify-center gap-2"
+            onClick={() => openNewEventModal(normalizeDate(new Date()))}
           >
-            <Plus className="h-4 w-4 ml-2" />
+            <Plus className="size-4" />
             رویداد جدید
           </Button>
-        </div>
-      </div>
+        </aside>
 
-      {/* Main area */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        {/* Header */}
-        <div className="border-b border-border p-4 bg-card">
-          <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <h2 className="text-2xl font-bold">
-                {JALALI_MONTH_NAMES[jalaliSelected.month - 1]}{" "}
-                {jalaliSelected.year}
-              </h2>
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={handleToday}>
+        <section className="flex-1 space-y-4">
+          <div className="rounded-2xl border border-border bg-background/80 p-4 shadow-sm">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex flex-wrap items-center gap-2 text-base font-semibold">
+                <span>
+                  {JALALI_MONTH_NAMES[jalaliSelected.month - 1]} {jalaliSelected.year}
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleToday}
+                  className="text-sm"
+                >
                   امروز
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-9 w-9"
-                  onClick={handlePrevMonth}
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-9 w-9"
-                  onClick={handleNextMonth}
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
               </div>
-            </div>
-
-            <div className="flex gap-2">
-              <Button
-                variant={viewMode === "day" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setViewMode("day")}
-              >
-                روز
-              </Button>
-              <Button
-                variant={viewMode === "week" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setViewMode("week")}
-              >
-                هفته
-              </Button>
-              <Button
-                variant={viewMode === "month" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setViewMode("month")}
-              >
-                ماه
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={handlePrevMonth}
+                  aria-label="ماه قبل"
+                >
+                  <ChevronLeft />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={handleNextMonth}
+                  aria-label="ماه بعد"
+                >
+                  <ChevronRight />
+                </Button>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant={viewMode === "day" ? "secondary" : "ghost"}
+                    size="sm"
+                    onClick={() => setViewMode("day")}
+                  >
+                    روز
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={viewMode === "week" ? "secondary" : "ghost"}
+                    size="sm"
+                    onClick={() => setViewMode("week")}
+                  >
+                    هفته
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={viewMode === "month" ? "secondary" : "ghost"}
+                    size="sm"
+                    onClick={() => setViewMode("month")}
+                  >
+                    ماه
+                  </Button>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Grid */}
-        <div className="flex-1 overflow-auto p-4">
-          {viewMode === "month" && (
-            <div className="h-full">
-              {/* Weekday header */}
-              <div className="grid grid-cols-7 gap-2 mb-2">
-                {JALALI_DAY_FULL.map((d) => (
-                  <div
-                    key={d}
-                    className="text-center text-sm font-semibold text-muted-foreground p-2"
-                  >
-                    {d}
-                  </div>
+          {viewMode === "month" ? (
+            <div className="relative rounded-2xl border border-border bg-background/80 p-4 shadow-sm">
+              {loading && (
+                <div className="absolute inset-0 flex items-center justify-center rounded-2xl bg-background/80 text-sm font-medium text-muted-foreground">
+                  در حال بارگذاری...
+                </div>
+              )}
+              <div className="grid grid-cols-7 gap-2 text-center text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                {WEEKDAY_FULL.map(day => (
+                  <span key={day}>{day}</span>
                 ))}
               </div>
-
-              {/* Days */}
-              <div className="grid grid-cols-7 gap-2">
-                {calendarDays.map((day, idx) => (
-                  <div
-                    key={idx}
-                    className={[
-                      "border border-border rounded-lg p-2 overflow-hidden cursor-pointer transition-shadow bg-card",
-                      day.isToday ? "ring-2 ring-primary bg-primary/5" : "",
-                      !day.isCurrentMonth ? "opacity-50" : "",
-                      "hover:shadow-md",
-                    ].join(" ")}
-                    onClick={() => openNewEventModal(day.date)}
-                  >
+              <div className="mt-3 grid flex-1 grid-cols-7 gap-3">
+                {calendarDays.map(day => {
+                  const dayTasks = day.tasks.slice(0, 3);
+                  const remainingCount =
+                    day.tasks.length > 3 ? day.tasks.length - 3 : 0;
+                  return (
                     <div
+                      key={day.date}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => handleDayCellClick(day.date)}
                       className={[
-                        "text-sm font-semibold mb-1",
-                        day.isToday ? "text-primary" : "",
+                        "flex h-40 flex-col rounded-2xl border border-border bg-background/60 p-3 transition hover:shadow-lg",
+                        day.isToday ? "ring-2 ring-primary/70" : "",
+                        !day.isCurrentMonth ? "opacity-60" : "",
                       ].join(" ")}
                     >
-                      {day.jalaliDate.day}
-                    </div>
-
-                    <div className="space-y-1">
-                      {day.tasks.slice(0, 3).map((task) => (
-                        <button
-                          key={task.id}
-                          className="w-full text-right text-xs p-1 rounded truncate hover:opacity-80"
-                          style={{
-                            backgroundColor: task.projectColor || "#6366f1",
-                            color: "#fff",
-                          }}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openEditEventModal(task);
-                          }}
-                        >
-                          {task.start_time && (
-                            <span className="ml-1 opacity-90">
-                              {task.start_time.substring(0, 5)}
+                      <div className="flex items-center justify-between text-sm font-semibold">
+                        <span>{day.jalaliDate.day}</span>
+                        {day.isToday && (
+                          <span className="text-[11px] text-primary">امروز</span>
+                        )}
+                      </div>
+                      <div className="mt-3 flex flex-1 flex-col gap-1">
+                        {dayTasks.map(task => (
+                          <div
+                            key={task.id}
+                            onClick={event => {
+                              event.stopPropagation();
+                              openEditEventModal(task);
+                            }}
+                            className="cursor-pointer rounded-full px-3 py-1 text-xs font-semibold text-white transition hover:opacity-90"
+                            style={{
+                              backgroundColor:
+                                task.projectColor ?? DEFAULT_PROJECT_COLOR,
+                            }}
+                          >
+                            <span className="flex items-center gap-2">
+                              {task.start_time
+                                ? task.start_time.slice(0, 5)
+                                : null}
+                              {task.title}
                             </span>
-                          )}
-                          {task.title}
-                        </button>
-                      ))}
-
-                      {day.tasks.length > 3 && (
-                        <div className="text-xs text-muted-foreground">
-                          +{day.tasks.length - 3} مورد دیگر
-                        </div>
-                      )}
+                          </div>
+                        ))}
+                        {remainingCount > 0 && (
+                          <div className="text-[11px] text-muted-foreground">
+                            +{remainingCount} مورد دیگر
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
-          )}
-
-          {(viewMode === "day" || viewMode === "week") && (
-            <div className="text-center text-muted-foreground py-10">
-              نمای {viewMode === "day" ? "روزانه" : "هفتگی"} به‌زودی اضافه
-              می‌شود.
+          ) : viewMode === "week" ? (
+            <div className="rounded-2xl border border-border bg-background/80 p-10 text-center text-sm font-medium text-muted-foreground">
+              نمای هفتگی به زودی...
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-border bg-background/80 p-10 text-center text-sm font-medium text-muted-foreground">
+              نمای روزانه به زودی...
             </div>
           )}
-        </div>
+        </section>
       </div>
 
-      {/* Modal */}
-      <Dialog open={showEventModal} onOpenChange={setShowEventModal}>
-        <DialogContent className="sm:max-w-[500px]" dir="rtl">
+      <Dialog open={showEventModal} onOpenChange={handleEventModalChange}>
+        <DialogContent className="max-w-xl rounded-2xl border border-border bg-background/80 p-6 shadow-lg">
           <DialogHeader>
-            <DialogTitle>
+            <DialogTitle className="text-right">
               {selectedTask ? "ویرایش رویداد" : "رویداد جدید"}
             </DialogTitle>
           </DialogHeader>
 
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="title">عنوان رویداد</Label>
+          <form className="space-y-4" onSubmit={formSubmit}>
+            <div className="space-y-1">
+              <Label htmlFor="event-title" className="text-right">
+                عنوان رویداد
+              </Label>
               <Input
-                id="title"
+                id="event-title"
                 value={formData.title}
-                onChange={(e) =>
-                  setFormData((f) => ({ ...f, title: e.target.value }))
+                onChange={event =>
+                  setFormData(prev => ({ ...prev, title: event.target.value }))
                 }
-                placeholder="عنوان را وارد کنید..."
+                required
+                className="text-right"
               />
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="date">تاریخ</Label>
+            <div className="space-y-1">
+              <Label htmlFor="event-date" className="text-right">
+                تاریخ
+              </Label>
               <Input
-                id="date"
+                id="event-date"
                 type="date"
                 value={formData.date}
-                onChange={(e) =>
-                  setFormData((f) => ({ ...f, date: e.target.value }))
+                onChange={event =>
+                  setFormData(prev => ({ ...prev, date: event.target.value }))
                 }
+                required
               />
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
               <Checkbox
                 id="all-day"
                 checked={formData.is_all_day}
-                onCheckedChange={(checked: boolean) =>
-                  setFormData((f) => ({
-                    ...f,
+                onCheckedChange={checked =>
+                  setFormData(prev => ({
+                    ...prev,
                     is_all_day: Boolean(checked),
+                    start_time: Boolean(checked) ? "" : prev.start_time,
+                    end_time: Boolean(checked) ? "" : prev.end_time,
                   }))
                 }
               />
-              <Label htmlFor="all-day" className="cursor-pointer">
+              <Label htmlFor="all-day" className="text-right text-sm font-semibold">
                 تمام روز
               </Label>
             </div>
 
             {!formData.is_all_day && (
               <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="start-time">زمان شروع</Label>
+                <div className="space-y-1">
+                  <Label htmlFor="start-time" className="text-right">
+                    زمان شروع
+                  </Label>
                   <Input
                     id="start-time"
                     type="time"
                     value={formData.start_time}
-                    onChange={(e) =>
-                      setFormData((f) => ({
-                        ...f,
-                        start_time: e.target.value,
+                    onChange={event =>
+                      setFormData(prev => ({
+                        ...prev,
+                        start_time: event.target.value,
                       }))
                     }
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="end-time">زمان پایان</Label>
+                <div className="space-y-1">
+                  <Label htmlFor="end-time" className="text-right">
+                    زمان پایان
+                  </Label>
                   <Input
                     id="end-time"
                     type="time"
                     value={formData.end_time}
-                    onChange={(e) =>
-                      setFormData((f) => ({
-                        ...f,
-                        end_time: e.target.value,
-                      }))
+                    onChange={event =>
+                      setFormData(prev => ({ ...prev, end_time: event.target.value }))
                     }
                   />
                 </div>
               </div>
             )}
 
-            <div className="space-y-2">
-              <Label>اولویت</Label>
-              <Select
-                value={formData.priority}
-                onValueChange={(value: "low" | "medium" | "high") =>
-                  setFormData((f) => ({ ...f, priority: value }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="انتخاب اولویت" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="low">کم</SelectItem>
-                  <SelectItem value="medium">متوسط</SelectItem>
-                  <SelectItem value="high">زیاد</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <Label htmlFor="priority" className="text-right">
+                  اولویت
+                </Label>
+                <Select
+                  value={formData.priority}
+                  onValueChange={value =>
+                    setFormData(prev => ({
+                      ...prev,
+                      priority: value as Task["priority"],
+                    }))
+                  }
+                >
+                  <SelectTrigger id="priority">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">کم</SelectItem>
+                    <SelectItem value="medium">متوسط</SelectItem>
+                    <SelectItem value="high">زیاد</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="project" className="text-right">
+                  پروژه
+                </Label>
+                <Select
+                  value={formData.project_id ?? "personal"}
+                  onValueChange={value =>
+                    setFormData(prev => ({
+                      ...prev,
+                      project_id: value === "personal" ? null : value,
+                    }))
+                  }
+                >
+                  <SelectTrigger id="project">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="personal">شخصی</SelectItem>
+                    {projects.map(project => (
+                      <SelectItem key={project.id} value={project.id}>
+                        {project.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
-            <div className="space-y-2">
-              <Label>پروژه</Label>
-              <Select
-                value={formData.project_id || "personal"}
-                onValueChange={(value: string) =>
-                  setFormData((f) => ({
-                    ...f,
-                    project_id: value === "personal" ? null : value,
-                  }))
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="انتخاب پروژه" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="personal">شخصی</SelectItem>
-                  {projects.map((p) => (
-                    <SelectItem key={p.id} value={p.id}>
-                      {p.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="description">توضیحات</Label>
+            <div className="space-y-1">
+              <Label htmlFor="description" className="text-right">
+                توضیحات
+              </Label>
               <Textarea
                 id="description"
-                rows={3}
-                placeholder="توضیحات اضافی..."
                 value={formData.description}
-                onChange={(e) =>
-                  setFormData((f) => ({ ...f, description: e.target.value }))
+                onChange={event =>
+                  setFormData(prev => ({ ...prev, description: event.target.value }))
                 }
+                className="text-right"
+                rows={3}
               />
             </div>
-          </div>
 
-          <DialogFooter>
-            <div className="flex gap-2 w-full">
-              {selectedTask && (
-                <Button
-                  variant="destructive"
-                  className="ml-auto"
-                  onClick={handleDeleteEvent}
-                >
-                  حذف
-                </Button>
-              )}
+            <DialogFooter className="flex flex-col gap-2 sm:flex-row-reverse">
               <Button
+                type="button"
                 variant="outline"
-                onClick={() => setShowEventModal(false)}
+                onClick={() => handleEventModalChange(false)}
               >
                 لغو
               </Button>
-              <Button onClick={handleSaveEvent}>ذخیره</Button>
-            </div>
-          </DialogFooter>
+              {selectedTask && (
+                <Button type="button" variant="destructive" onClick={handleDeleteEvent}>
+                  حذف
+                </Button>
+              )}
+              <Button type="submit">ذخیره</Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

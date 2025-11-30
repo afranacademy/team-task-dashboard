@@ -1,0 +1,1 @@
+export { toJalali } from "./jalaliUtils";

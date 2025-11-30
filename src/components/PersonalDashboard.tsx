@@ -23,6 +23,7 @@ interface PersonalDashboardProps {
   onViewOtherUser: (userId: string) => void;
   onEditProfile: () => void;
   onOpenProjects: () => void;
+  onOpenCalendar: () => void;
   onUpdateMood: (userId: string, mood: Mood) => void;
   onDeleteTask: (taskId: string) => void;
 }
@@ -42,6 +43,7 @@ export function PersonalDashboard({
   onOpenProjects,
   onUpdateMood,
   onDeleteTask,
+  onOpenCalendar,
 }: PersonalDashboardProps) {
   const allTasks = currentUser.tasks ?? [];
   const personalTasks = useMemo(
@@ -65,16 +67,17 @@ export function PersonalDashboard({
         <div className="min-h-screen bg-gradient-to-br from-gray-50 via-slate-50 to-purple-50">
           <div className="max-w-[1280px] mx-auto">
             <div className="flex gap-6 p-6 flex-1">
-              <DashboardSidebar
-                currentUser={currentUser}
-                accessibleMembers={accessibleMembers}
-                onUpdateMood={onUpdateMood}
-                onViewOtherUser={onViewOtherUser}
-                onManagePermissions={onManagePermissions}
-                onEditProfile={onEditProfile}
-                onLogout={onLogout}
-                onOpenProjects={onOpenProjects}
-              />
+                  <DashboardSidebar
+                    currentUser={currentUser}
+                    accessibleMembers={accessibleMembers}
+                    onUpdateMood={onUpdateMood}
+                    onViewOtherUser={onViewOtherUser}
+                    onManagePermissions={onManagePermissions}
+                    onEditProfile={onEditProfile}
+                    onLogout={onLogout}
+                    onOpenProjects={onOpenProjects}
+                    onOpenCalendar={onOpenCalendar}
+                  />
 
               <main className="flex-1 min-w-0">
                 <div className="flex items-center justify-between mb-6">

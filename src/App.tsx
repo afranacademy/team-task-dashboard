@@ -11,6 +11,8 @@ import { EditProfileDialog } from './components/EditProfileDialog';
 import { ProjectsDashboard } from './components/ProjectsDashboard';
 import { ProjectDetailView } from './components/ProjectDetailView';
 import { AddProjectTaskDialog } from './components/AddProjectTaskDialog';
+import { CalendarView } from './components/CalendarView';
+import { Button } from './components/ui/button';
 
 const mapDbMemberToTeamMember = (member: any): TeamMember => ({
   id: String(member.id),
@@ -25,7 +27,7 @@ const mapDbMemberToTeamMember = (member: any): TeamMember => ({
   tasks: member.tasks ?? [],
 });
 
-type View = 'login' | 'personal' | 'viewing-other' | 'projects-list' | 'project-detail';
+type View = 'login' | 'personal' | 'viewing-other' | 'projects-list' | 'project-detail' | 'calendar';
 
 export default function App() {
   const [members, setMembers] = useState<TeamMember[]>([]);
@@ -397,6 +399,10 @@ export default function App() {
   const handleOpenProjects = () => {
     setCurrentView('projects-list');
     setSelectedProjectId(null);
+  };
+
+  const handleOpenCalendarView = () => {
+    setCurrentView('calendar');
   };
 
   const handleOpenProjectDetail = async (projectId: string) => {
@@ -874,6 +880,25 @@ export default function App() {
     );
   }
 
+  if (currentView === 'calendar') {
+    return (
+      <div
+        dir="rtl"
+        className="min-h-screen bg-gradient-to-br from-gray-50 via-slate-50 to-purple-50"
+      >
+        <div className="mx-auto w-full max-w-[1280px] px-4 py-6">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
+            <Button variant="outline" onClick={() => setCurrentView('personal')}>
+              بازگشت به داشبورد
+            </Button>
+            <p className="text-sm text-muted-foreground">نمای پنل تقویم</p>
+          </div>
+          <CalendarView currentUser={currentUser} />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen" dir="rtl">
       {currentView === 'personal' ? (
@@ -891,6 +916,7 @@ export default function App() {
           onViewOtherUser={userId => { void handleViewOtherUser(userId); }}
           onEditProfile={() => setIsEditProfileOpen(true)}
           onOpenProjects={handleOpenProjects}
+          onOpenCalendar={handleOpenCalendarView}
           onUpdateMood={handleUpdateMood}
           onDeleteTask={handleDeleteTask}
         />
